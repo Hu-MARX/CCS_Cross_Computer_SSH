@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_root="${CCS_WORKSPACE_STATE_ROOT:-$HOME/.ml-orchestrator}"
+export PYTHONPATH="$state_root/app/src${PYTHONPATH:+:$PYTHONPATH}"
+exec /usr/bin/python3 -m trainctl.cli "$@"

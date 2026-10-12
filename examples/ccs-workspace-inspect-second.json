@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "request_id": "workspace-inspect-second-001",
+  "actor": {"id": "codex-local", "kind": "agent"},
+  "action": "workspace.execute",
+  "dry_run": false,
+  "payload": {
+    "worker_id": "worker-b",
+    "request": {
+      "action": "inspect",
+      "project": "/srv/research",
+      "mode": "tree",
+      "path": ".",
+      "depth": 2,
+      "limit": 500
+    }
+  }
+}

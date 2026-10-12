@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "request_id": "checkpoint-gate-negotiation-20260906-v1",
+  "actor": {"id": "codex-local", "kind": "agent"},
+  "action": "run.submit",
+  "dry_run": true,
+  "payload": {
+    "worker_id": "worker-b",
+    "idempotency_key": "checkpoint-gate-negotiation-20260906-v1",
+    "spec": {
+      "schema_version": 1,
+      "name": "checkpoint-input-gate-negotiation",
+      "project": {"path": "/srv/research/rf-detr"},
+      "runtime": {"workdir": "/srv/research/rf-detr"},
+      "command": {"argv": ["/usr/bin/true"]},
+      "task": {
+        "kind": "train",
+        "inputs": [],
+        "checkpoint": {
+          "path": "/home/ubuntu/.ml-orchestrator/checkpoint-imports/import_00000000000000000000000000000000/checkpoint.ckpt",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      }
+    }
+  }
+}

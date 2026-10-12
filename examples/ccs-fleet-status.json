@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "request_id": "fleet-status-001",
+  "actor": {"id": "codex-local", "kind": "agent"},
+  "action": "fleet.status",
+  "dry_run": false,
+  "payload": {}
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "project_id": "contract_fixture",
+  "title": "AUTHOR_INPUT_NEEDED",
+  "research_question": "Does the declared candidate change the fixed outcome?",
+  "hypothesis": "The candidate increases the fixed outcome under the same budget.",
+  "scope_boundary": "Only the fixture dataset, independent runs, and declared budget.",
+  "worker_pool": {
+    "config_path": "config/worker-pool.json",
+    "selection_policy": "upper_agent_explicit",
+    "expected_workers": ["lab118", "ubuntu-second"]
+  },
+  "analysis_contract": {
+    "independent_unit": "One independently seeded run.",
+    "primary_outcome": "Mean score on the fixed development split.",
+    "effect_size": "Paired difference in mean score.",
+    "uncertainty_interval": "A 95 percent interval across independent runs.",
+    "multiplicity": "One confirmatory endpoint.",
+    "replication": {
+      "independent_runs": 3,
+      "seed_policy": "Fixed seeds 1, 2, and 3; report all results."
+    },
+    "randomization": "Fixed order shared by all conditions.",
+    "blinding": "Not applicable to this contract-only fixture.",
+    "exclusions": "Keep failed runs in the record.",
+    "missing_data": "Report incomplete runs without imputation.",
+    "held_out_test": "Final test data remain unused during development."
+  },
+  "literature": {
+    "profile_path": "config/literature-profile.yaml",
+    "raw_archive": "raw/literature"
+  },
+  "manuscript": {
+    "paper_type": "research",
+    "source_language": "en",
+    "target_journal": "Fixture venue"
+  },
+  "budget": {
+    "max_runs": 3,
+    "max_gpu_hours": 1,
+    "max_storage_gb": 1
+  },
+  "ethics": {
+    "review_state": "Not applicable to synthetic contract fixtures.",
+    "sensitive_data": false
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "name": "cvfdetr-gcr-gpu-smoke",
+  "project": {"path": "/srv/research/cvfdetr"},
+  "runtime": {
+    "workdir": "/srv/research/cvfdetr",
+    "environment_variables": {
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "CUDA_VISIBLE_DEVICES": "0",
+      "PATH": "/home/worker-a/miniconda3/envs/CVFDETR/bin:/usr/local/bin:/usr/bin:/bin"
+    }
+  },
+  "command": {"argv": ["/home/worker-a/miniconda3/envs/CVFDETR/bin/python", "-u", "/srv/ml-orchestrator/app/examples/cvfdetr_smoke.py"]},
+  "resources": {"gpu_index": 0, "max_duration_seconds": 300, "max_queue_seconds": 600},
+  "outputs": {"artifact_glob": "orchestrator_runs/${RUN_ID}/*.json"},
+  "automation": {"max_attempts": 1, "allowed_actions": ["wait", "complete"]}
+}

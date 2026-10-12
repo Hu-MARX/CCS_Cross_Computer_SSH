@@ -1,0 +1,6 @@
+{
+  "action": "prepare_decision_package",
+  "study_id": "study_2bc7f9831e9d408fb7e4a74ffc783b8e",
+  "stage_id": "train",
+  "checkpoint_directory": "/srv/research/cvfdetr/orchestrator_runs/run_00000000000000000000000000000000/checkpoints"
+}

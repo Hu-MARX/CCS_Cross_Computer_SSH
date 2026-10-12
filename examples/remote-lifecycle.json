@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "name": "remote-lifecycle-check",
+  "runtime": {"workdir": "/srv/ml-orchestrator/app/examples"},
+  "command": {"argv": ["python3", "-u", "-c", "import time; print('training started', flush=True); time.sleep(8); print('training finished')"]},
+  "evaluation": {"argv": ["python3", "-c", "print('evaluation passed')"]},
+  "automation": {"max_attempts": 1, "allowed_actions": ["wait", "complete"]}
+}

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "request_id": "rfdetr-recovery-smoke-submit-20260906-v1",
+  "actor": {"id": "codex-local", "kind": "agent"},
+  "action": "run.submit",
+  "dry_run": false,
+  "confirm_plan_sha256": "2a79f3b4df34607404eb59b6e3c5ffd6e3c6f1f702cb150f91ace737fc402cda",
+  "payload": {
+    "worker_id": "worker-b",
+    "idempotency_key": "rfdetr-recovery-smoke-20260906-v1",
+    "spec": {
+      "schema_version": 1,
+      "name": "rfdetr-recovery-managed-smoke",
+      "project": {"path": "/srv/research/rf-detr"},
+      "runtime": {
+        "workdir": "/srv/research/rf-detr",
+        "environment_variables": {
+          "PYTHONDONTWRITEBYTECODE": "1",
+          "PYTHONPATH": "/home/ubuntu/.ml-orchestrator/app/src",
+          "PATH": "/home/ubuntu/anaconda3/envs/RFDETR/bin:/usr/local/bin:/usr/bin:/bin",
+          "HF_HUB_OFFLINE": "1",
+          "WANDB_MODE": "disabled",
+          "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
+          "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"
+        }
+      },
+      "command": {
+        "argv": [
+          "/home/ubuntu/anaconda3/envs/RFDETR/bin/python", "-u",
+          "/home/ubuntu/.ml-orchestrator/app/examples/rfdetr_managed.py",
+          "--epochs", "1", "--batch-size", "2", "--grad-accum", "4",
+          "--num-workers", "0", "--fast-dev-run"
+        ]
+      },
+      "resources": {"gpu_index": 0, "max_duration_seconds": 900, "max_queue_seconds": 60},
+      "outputs": {"checkpoint_glob": "orchestrator_runs/${RUN_ID}/checkpoints/*.ckpt"},
+      "automation": {"max_attempts": 1, "allowed_actions": ["wait", "complete"]},
+      "task": {"kind": "train", "inputs": []}
+    }
+  }
+}

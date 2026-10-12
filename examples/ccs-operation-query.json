@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "request_id": "operation-query-001",
+  "actor": {"id": "my-harness", "kind": "agent"},
+  "action": "operation.query",
+  "dry_run": false,
+  "payload": {"idempotency_key": "my-proposed-run-v1"}
+}

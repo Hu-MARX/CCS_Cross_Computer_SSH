@@ -1,0 +1,3042 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "action": {
+      "enum": [
+        "worker.health",
+        "worker.monitor",
+        "worker.alerts",
+        "worker.storage",
+        "worker.processes",
+        "run.snapshot",
+        "run.events",
+        "run.logs",
+        "run.artifacts",
+        "run.submit",
+        "run.cancel",
+        "checkpoint.replicate",
+        "checkpoint.import",
+        "workspace.execute",
+        "fleet.status",
+        "gateway.audit",
+        "operation.query",
+        "operation.reconcile",
+        "gateway.describe"
+      ]
+    },
+    "classification": {
+      "enum": [
+        "read",
+        "mutation"
+      ]
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "executed": {
+      "type": "boolean"
+    },
+    "executable": {
+      "type": "boolean"
+    },
+    "plan_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "required_capabilities": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "compatibility": {
+      "$ref": "#/$defs/compatibility"
+    },
+    "result": {},
+    "execution_state": {
+      "enum": [
+        "not_sent",
+        "rejected",
+        "confirmed",
+        "unknown"
+      ]
+    },
+    "operation": {
+      "$ref": "#/$defs/operation"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "action",
+    "classification",
+    "dry_run",
+    "executed",
+    "executable",
+    "plan_sha256",
+    "required_capabilities",
+    "compatibility",
+    "result"
+  ],
+  "additionalProperties": false,
+  "title": "CCS Agent Interface Result v1",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "worker.health"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "hostname": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "python": {
+                "type": "string"
+              },
+              "checked_at": {
+                "type": "string"
+              },
+              "cpu": {
+                "type": "object"
+              },
+              "memory": {
+                "type": "object"
+              },
+              "gpu": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "disk": {
+                "type": "object",
+                "properties": {
+                  "total_bytes": {
+                    "type": "integer"
+                  },
+                  "free_bytes": {
+                    "type": "integer"
+                  },
+                  "used_bytes": {
+                    "type": "integer"
+                  }
+                },
+                "required": [],
+                "additionalProperties": true
+              },
+              "ccs_interface": {
+                "type": "object"
+              },
+              "online": {
+                "type": "boolean"
+              },
+              "adapter": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "worker_id"
+            ],
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "worker.monitor"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "observation_state": {
+                "enum": [
+                  "fresh",
+                  "stale",
+                  "unavailable"
+                ]
+              },
+              "observed_at": {
+                "type": "string"
+              },
+              "age_seconds": {
+                "type": "number"
+              },
+              "interval_seconds": {
+                "type": "number"
+              },
+              "state": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "integer"
+              },
+              "observed_runs": {
+                "type": "integer"
+              },
+              "health": {
+                "type": "object",
+                "properties": {
+                  "hostname": {
+                    "type": "string"
+                  },
+                  "platform": {
+                    "type": "string"
+                  },
+                  "python": {
+                    "type": "string"
+                  },
+                  "checked_at": {
+                    "type": "string"
+                  },
+                  "cpu": {
+                    "type": "object"
+                  },
+                  "memory": {
+                    "type": "object"
+                  },
+                  "gpu": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "disk": {
+                    "type": "object",
+                    "properties": {
+                      "total_bytes": {
+                        "type": "integer"
+                      },
+                      "free_bytes": {
+                        "type": "integer"
+                      },
+                      "used_bytes": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [],
+                    "additionalProperties": true
+                  },
+                  "ccs_interface": {
+                    "type": "object"
+                  },
+                  "online": {
+                    "type": "boolean"
+                  },
+                  "adapter": {
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "additionalProperties": true
+              },
+              "runs": {},
+              "errors": {},
+              "online": {
+                "type": "boolean"
+              },
+              "checked_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "worker_id"
+            ],
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "worker.alerts"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "alerts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "run_id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "type": "string"
+                    },
+                    "opened_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "resolved_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "payload": {
+                      "type": "object"
+                    }
+                  },
+                  "required": [],
+                  "additionalProperties": true
+                }
+              },
+              "online": {
+                "type": "boolean"
+              },
+              "checked_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "worker_id"
+            ],
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "worker.storage"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "policy": {
+                "type": "object",
+                "properties": {
+                  "sample_retention_days": {
+                    "type": "integer"
+                  },
+                  "backup_keep": {
+                    "type": "integer"
+                  },
+                  "maintenance_interval_seconds": {
+                    "type": "integer"
+                  }
+                },
+                "required": [],
+                "additionalProperties": true
+              },
+              "maintenance": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string"
+                  },
+                  "completed_at": {
+                    "type": "string"
+                  },
+                  "backup_path": {
+                    "type": "string"
+                  },
+                  "backup_high_water_id": {
+                    "type": "integer"
+                  },
+                  "deleted_samples": {
+                    "type": "integer"
+                  },
+                  "cutoff": {
+                    "type": "string"
+                  },
+                  "removed_backups": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "policy": {
+                    "type": "object"
+                  },
+                  "error_at": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "additionalProperties": true
+              },
+              "online": {
+                "type": "boolean"
+              },
+              "pressure": {
+                "type": "string"
+              },
+              "checked_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "worker_id"
+            ],
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "worker.processes"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "state": {
+                "enum": [
+                  "available",
+                  "unsupported"
+                ]
+              },
+              "observed_at": {
+                "type": "string"
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "pid": {
+                      "type": "integer"
+                    },
+                    "managed": {
+                      "type": "boolean"
+                    },
+                    "launcher": {
+                      "type": "string"
+                    },
+                    "script": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "project": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "state": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "memory_bytes": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [],
+                  "additionalProperties": true
+                }
+              },
+              "processes": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "online": {
+                "type": "boolean"
+              },
+              "checked_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "worker_id"
+            ],
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "run.snapshot"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/snapshot"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "run.events"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "events": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/event"
+                }
+              },
+              "next_cursor": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "has_more": {
+                "type": "boolean"
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "run_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "worker_id",
+              "events"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "run.logs"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "run_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "stream": {
+                "enum": [
+                  "stdout",
+                  "stderr"
+                ]
+              },
+              "offset": {
+                "type": "integer"
+              },
+              "text": {
+                "type": "string"
+              },
+              "next_offset": {
+                "type": "integer"
+              },
+              "has_more": {
+                "type": "boolean"
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "eof": {
+                "type": "boolean"
+              },
+              "data_base64": {
+                "type": "string"
+              },
+              "total_bytes": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "worker_id",
+              "run_id",
+              "stream",
+              "offset",
+              "text",
+              "next_offset"
+            ],
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "run.artifacts"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "artifacts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/artifact"
+                }
+              },
+              "next_cursor": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 8192
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "has_more": {
+                "type": "boolean"
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "run_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "worker_id",
+              "artifacts"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "run.submit"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "status": {
+                "enum": [
+                  "QUEUED",
+                  "PREPARING",
+                  "RUNNING",
+                  "EVALUATING",
+                  "SUCCEEDED",
+                  "FAILED",
+                  "CANCELLED",
+                  "LOST"
+                ]
+              },
+              "spec": {
+                "$ref": "#/$defs/experimentSpec"
+              },
+              "worker": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "parent_run_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "idempotency_key": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "attempt": {
+                "type": "integer"
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "started_at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "finished_at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "exit_code": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "spec",
+              "worker",
+              "idempotency_key"
+            ],
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "run.cancel"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/snapshot"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "checkpoint.replicate"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "schema_version": {
+                "const": 1
+              },
+              "status": {
+                "enum": [
+                  "replicated",
+                  "present"
+                ]
+              },
+              "worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "run_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "checkpoint_id": {
+                "type": "string",
+                "pattern": "^ckpt_[a-f0-9]{32}$"
+              },
+              "size": {
+                "type": "integer"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "checkpoint_path": {
+                "type": "string"
+              },
+              "manifest_path": {
+                "type": "string"
+              },
+              "receipt_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "schema_version",
+              "status",
+              "worker_id",
+              "run_id",
+              "checkpoint_id",
+              "size",
+              "sha256",
+              "checkpoint_path",
+              "manifest_path",
+              "receipt_sha256"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "checkpoint.import"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "imported",
+                  "present"
+                ]
+              },
+              "import_id": {
+                "type": "string",
+                "pattern": "^import_[a-f0-9]{32}$"
+              },
+              "source_worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "source_run_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "checkpoint_id": {
+                "type": "string",
+                "pattern": "^ckpt_[a-f0-9]{32}$"
+              },
+              "target_worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "checkpoint_path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "^/[^\\u0000]*$"
+              },
+              "size": {
+                "type": "integer"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "import_receipt_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "replica_receipt_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "status",
+              "import_id",
+              "source_worker_id",
+              "source_run_id",
+              "checkpoint_id",
+              "target_worker_id",
+              "checkpoint_path",
+              "size",
+              "sha256",
+              "import_receipt_sha256",
+              "replica_receipt_sha256"
+            ],
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "workspace.execute"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "const": "inspect"
+                  },
+                  "mode": {
+                    "enum": [
+                      "list",
+                      "tree",
+                      "read",
+                      "search"
+                    ]
+                  },
+                  "worker_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "depth": {
+                    "type": "integer"
+                  },
+                  "entries": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/workspaceEntry"
+                    }
+                  },
+                  "truncated": {
+                    "type": "boolean"
+                  },
+                  "limit_reached": {
+                    "type": "boolean"
+                  },
+                  "depth_limited": {
+                    "type": "boolean"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "query": {
+                    "type": "string"
+                  },
+                  "matches": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "match": {
+                          "enum": [
+                            "name",
+                            "content"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "match"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "action",
+                  "mode",
+                  "project",
+                  "worker_id"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "change_id": {
+                    "type": "string",
+                    "pattern": "^change_[a-f0-9]{32}$"
+                  },
+                  "status": {
+                    "enum": [
+                      "staged",
+                      "applied",
+                      "restored",
+                      "discarded"
+                    ]
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "applied_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "restored_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "discarded_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "plan_sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "applied_sha256": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "action": {
+                    "const": "diff"
+                  },
+                  "worker_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                  },
+                  "diff": {
+                    "type": "string"
+                  },
+                  "truncated": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "change_id",
+                  "status",
+                  "project",
+                  "plan_sha256"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "const": "changes"
+                  },
+                  "worker_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                  },
+                  "changes": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/workspaceSummary"
+                    }
+                  },
+                  "truncated": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "action",
+                  "worker_id",
+                  "changes",
+                  "truncated"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "change_id": {
+                    "type": "string",
+                    "pattern": "^change_[a-f0-9]{32}$"
+                  },
+                  "status": {
+                    "enum": [
+                      "staged",
+                      "applied",
+                      "restored",
+                      "discarded"
+                    ]
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "applied_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "restored_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "discarded_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "plan_sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "applied_sha256": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "worker_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "change_id",
+                  "status",
+                  "project",
+                  "plan_sha256"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "change_id": {
+                    "type": "string",
+                    "pattern": "^change_[a-f0-9]{32}$"
+                  },
+                  "status": {
+                    "enum": [
+                      "staged",
+                      "applied",
+                      "restored",
+                      "discarded"
+                    ]
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "applied_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "restored_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "discarded_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "plan_sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "applied_sha256": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "worker_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "change_id",
+                  "status",
+                  "project",
+                  "plan_sha256"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "change_id": {
+                    "type": "string",
+                    "pattern": "^change_[a-f0-9]{32}$"
+                  },
+                  "status": {
+                    "enum": [
+                      "staged",
+                      "applied",
+                      "restored",
+                      "discarded"
+                    ]
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "applied_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "restored_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "discarded_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "plan_sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "applied_sha256": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "worker_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "change_id",
+                  "status",
+                  "project",
+                  "plan_sha256"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "change_id": {
+                    "type": "string",
+                    "pattern": "^change_[a-f0-9]{32}$"
+                  },
+                  "status": {
+                    "enum": [
+                      "staged",
+                      "applied",
+                      "restored",
+                      "discarded"
+                    ]
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "applied_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "restored_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "discarded_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "plan_sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "applied_sha256": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "worker_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "change_id",
+                  "status",
+                  "project",
+                  "plan_sha256"
+                ],
+                "additionalProperties": true
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "fleet.status"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "schema_version": {
+                "const": 1
+              },
+              "selection_policy": {
+                "const": "upper_agent_explicit"
+              },
+              "workers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "worker_id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                    },
+                    "labels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "connection": {
+                      "anyOf": [
+                        {
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "node": {
+                      "anyOf": [
+                        {
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "disabled_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "state": {
+                      "enum": [
+                        "unreachable",
+                        "disabled",
+                        "available",
+                        "incompatible"
+                      ]
+                    },
+                    "compatibility": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/compatibility"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workload_count": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "managed_workload_count": {
+                      "anyOf": [
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workload_state": {
+                      "type": "string"
+                    },
+                    "workload_error": {
+                      "anyOf": [
+                        {
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cpu": {
+                      "anyOf": [
+                        {
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "memory": {
+                      "anyOf": [
+                        {
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "gpu": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "disk": {
+                      "anyOf": [
+                        {
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "checked_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "error": {
+                      "anyOf": [
+                        {
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "worker_id",
+                    "state"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "observation_budget": {
+                "type": "object",
+                "properties": {
+                  "max_concurrent": {
+                    "const": 4
+                  },
+                  "timeout_seconds": {
+                    "type": "number"
+                  },
+                  "worker_timeout_seconds": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "max_concurrent",
+                  "timeout_seconds",
+                  "worker_timeout_seconds"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "schema_version",
+              "selection_policy",
+              "workers"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "gateway.audit"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "records": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "seq": {
+                      "type": "integer"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                    },
+                    "actor": {
+                      "type": "object"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "classification": {
+                      "enum": [
+                        "read",
+                        "mutation"
+                      ]
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "plan_sha256": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "outcome": {
+                      "enum": [
+                        "planned",
+                        "started",
+                        "unknown",
+                        "succeeded",
+                        "failed"
+                      ]
+                    },
+                    "error_code": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "operation_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "worker_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "run_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "execution_state": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "records"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "operation.query"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/operation"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "operation.reconcile"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/operation"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "gateway.describe"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "compatibility": {
+                    "type": "object"
+                  },
+                  "actions": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "type": "string"
+                        },
+                        "classification": {
+                          "enum": [
+                            "read",
+                            "mutation",
+                            "dynamic"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "input_schema": {
+                          "type": "object"
+                        },
+                        "output_schema": {
+                          "type": "object"
+                        },
+                        "examples": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        },
+                        "constraints": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "workspace_action": {
+                          "type": "string"
+                        },
+                        "workspace_actions": {
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "classification",
+                        "input_schema",
+                        "output_schema",
+                        "examples"
+                      ],
+                      "additionalProperties": true
+                    }
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "actions"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string"
+                  },
+                  "classification": {
+                    "enum": [
+                      "read",
+                      "mutation",
+                      "dynamic"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "input_schema": {
+                    "type": "object"
+                  },
+                  "output_schema": {
+                    "type": "object"
+                  },
+                  "examples": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "constraints": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "workspace_action": {
+                    "type": "string"
+                  },
+                  "workspace_actions": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "action",
+                  "classification",
+                  "input_schema",
+                  "output_schema",
+                  "examples"
+                ],
+                "additionalProperties": true
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "compatibility": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "reachable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compatible": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required": {
+          "type": "object"
+        },
+        "interface": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "missing_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": true
+    },
+    "operation": {
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "action": {
+          "type": "string"
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actor": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "worker_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idempotency_key": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "spec_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plan_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intent_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "started",
+            "unknown",
+            "confirmed",
+            "not_sent",
+            "rejected"
+          ]
+        },
+        "execution_state": {
+          "enum": [
+            "not_sent",
+            "unknown",
+            "confirmed",
+            "rejected"
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "action",
+        "worker_id",
+        "state",
+        "execution_state"
+      ],
+      "additionalProperties": true
+    },
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "status": {
+          "enum": [
+            "QUEUED",
+            "PREPARING",
+            "RUNNING",
+            "EVALUATING",
+            "SUCCEEDED",
+            "FAILED",
+            "CANCELLED",
+            "LOST"
+          ]
+        },
+        "worker_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "heartbeat_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observation": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "progress": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_gate": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_runtime": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_snapshot": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runtime_configuration": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "run_id",
+        "status",
+        "worker_id"
+      ],
+      "additionalProperties": true
+    },
+    "event": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "kind": {
+          "type": "string"
+        },
+        "payload": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "seq",
+        "kind",
+        "payload"
+      ],
+      "additionalProperties": true
+    },
+    "artifact": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^/[^\\u0000]*$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checkpoint_id": {
+          "type": "string",
+          "pattern": "^ckpt_[a-f0-9]{32}$"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": true
+    },
+    "experimentSpec": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "project": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runtime": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "command": {
+          "type": "object",
+          "properties": {
+            "argv": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1
+            },
+            "shell": {
+              "const": false
+            }
+          },
+          "required": [
+            "argv"
+          ],
+          "additionalProperties": true
+        },
+        "resources": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "gpu_index": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "max_duration_seconds": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "max_queue_seconds": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [],
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outputs": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evaluation": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "argv": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "minItems": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [],
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "success": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "automation": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "max_attempts": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "allowed_actions": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "wait",
+                      "evaluate",
+                      "retry_same",
+                      "resume_checkpoint",
+                      "run_test",
+                      "request_approval",
+                      "complete",
+                      "stop_workflow"
+                    ]
+                  }
+                }
+              },
+              "required": [],
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "bundle_id": {
+                  "type": "string",
+                  "pattern": "^bundle_[a-f0-9]{32}$"
+                },
+                "manifest_sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "timeout_seconds": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 3600,
+                  "default": 600
+                },
+                "execution_mode": {
+                  "enum": [
+                    "source",
+                    "snapshot"
+                  ],
+                  "default": "source"
+                }
+              },
+              "required": [
+                "bundle_id",
+                "manifest_sha256"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "task": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "train",
+                    "test",
+                    "analysis",
+                    "build",
+                    "simulate",
+                    "benchmark",
+                    "data"
+                  ]
+                },
+                "source_run_id": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "inputs": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/inputReference"
+                  },
+                  "maxItems": 64
+                },
+                "checkpoint": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/inputReference"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "name",
+        "command"
+      ],
+      "additionalProperties": true,
+      "description": "Known execution fields are validated; metadata objects remain extensible. Null optional metadata objects normalize to empty objects. Unknown top-level metadata is retained by the contract but may be ignored by ExperimentSpec normalization."
+    },
+    "inputReference": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "workspaceEntry": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "symlink",
+            "directory",
+            "file"
+          ]
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "depth": {
+          "type": "integer"
+        },
+        "protected": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "kind"
+      ],
+      "additionalProperties": true
+    },
+    "workspaceSummary": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "change_id": {
+          "type": "string",
+          "pattern": "^change_[a-f0-9]{32}$"
+        },
+        "status": {
+          "enum": [
+            "staged",
+            "applied",
+            "restored",
+            "discarded"
+          ]
+        },
+        "project": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "applied_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "restored_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "discarded_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plan_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "applied_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "change_id",
+        "status",
+        "project",
+        "plan_sha256"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

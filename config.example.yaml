@@ -1,0 +1,17 @@
+database_url: sqlite:///data/orchestrator.db
+store_root: /srv/ml-orchestrator
+polling:
+  active_seconds: 5
+  idle_seconds: 30
+  reconcile_seconds: 60
+workers:
+  ubuntu-gpu-01:
+    ssh_host: ml-worker
+    remote_root: /srv/ml-orchestrator
+    max_parallel_runs: 1
+codex:
+  mode: exec
+  timeout_seconds: 900
+policy:
+  max_attempts_per_workflow: 3
+  require_approval_for_config_changes: true

@@ -1,0 +1,84 @@
+{
+  "action": "create",
+  "idempotency_key": "cvfdetr-snapshot-50epochs-study-20260905-v1",
+  "study": {
+    "schema_version": 1,
+    "name": "CVFDETR-GCR 50-epoch managed training",
+    "research_question": "Can the frozen CVFDETR-GCR configuration complete 50 epochs while preserving reproducible training and validation evidence?",
+    "planning": {
+      "origin": "adopted_pre_workflow_run",
+      "scope": "training_and_validation_only",
+      "held_out_test": "not_in_this_study",
+      "next_decision": "After training completes, Codex and the selected Nature Skills review the evidence and exact managed checkpoint before proposing a separately approved held-out test Study."
+    },
+    "budget": {
+      "max_runs": 1
+    },
+    "stages": [
+      {
+        "id": "train",
+        "name": "CVFDETR-GCR 50-epoch training and validation",
+        "kind": "train",
+        "depends_on": [],
+        "requires_approval": false,
+        "spec": {
+          "schema_version": 1,
+          "name": "cvfdetr-snapshot-50epochs",
+          "project": {
+            "path": "/srv/research/cvfdetr"
+          },
+          "runtime": {
+            "workdir": "/srv/research/cvfdetr",
+            "environment_variables": {
+              "PYTHONDONTWRITEBYTECODE": "1",
+              "PYTHONPATH": "/srv/ml-orchestrator/app/src",
+              "PATH": "/home/worker-a/miniconda3/envs/CVFDETR/bin:/usr/local/bin:/usr/bin:/bin"
+            }
+          },
+          "command": {
+            "argv": [
+              "/home/worker-a/miniconda3/envs/CVFDETR/bin/python",
+              "-u",
+              "/srv/ml-orchestrator/app/examples/cvfdetr_snapshot.py",
+              "--batch-size",
+              "1",
+              "--grad-accum",
+              "2",
+              "--num-workers",
+              "1",
+              "--epochs",
+              "50",
+              "--checkpoint-steps",
+              "1000",
+              "--checkpoint-seconds",
+              "1800"
+            ]
+          },
+          "evidence": {
+            "bundle_id": "bundle_3c4fe93b9c9b46daac480a2e02bfe6ba",
+            "manifest_sha256": "89b5f5a7111e4370fed65242d5f62e68169d14313aaf93636e5ef0e4b744f876",
+            "timeout_seconds": 600,
+            "execution_mode": "snapshot"
+          },
+          "resources": {
+            "gpu_index": 0
+          },
+          "outputs": {
+            "artifact_glob": "orchestrator_runs/${RUN_ID}/*.json"
+          },
+          "automation": {
+            "max_attempts": 1,
+            "allowed_actions": [
+              "wait",
+              "complete"
+            ]
+          },
+          "task": {
+            "kind": "train",
+            "inputs": []
+          }
+        }
+      }
+    ]
+  }
+}

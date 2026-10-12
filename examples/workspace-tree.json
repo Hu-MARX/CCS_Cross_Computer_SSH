@@ -1,0 +1,8 @@
+{
+  "action": "inspect",
+  "mode": "tree",
+  "project": "/srv/research",
+  "path": "cvfdetr_gcr/src",
+  "depth": 4,
+  "limit": 2000
+}

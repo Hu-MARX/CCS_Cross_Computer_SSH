@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "name": "trainctl-smoke",
+  "project": {"repository": "local-example"},
+  "runtime": {"workdir": "examples"},
+  "command": {"argv": ["python", "smoke.py"]},
+  "outputs": {"artifact_glob": "smoke-output.txt"},
+  "automation": {"max_attempts": 1, "allowed_actions": ["wait", "complete"]}
+}

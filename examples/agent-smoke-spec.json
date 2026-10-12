@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "name": "ccs-agent-smoke",
+  "project": {},
+  "runtime": {},
+  "command": {
+    "argv": ["python3", "-c", "import json; print(json.dumps({'message': 'hello from CCS'}))"]
+  },
+  "resources": {"max_duration_seconds": 30},
+  "task": {"kind": "analysis", "inputs": []}
+}

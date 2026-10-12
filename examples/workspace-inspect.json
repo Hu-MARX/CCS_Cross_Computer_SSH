@@ -1,0 +1,6 @@
+{
+  "action": "inspect",
+  "mode": "list",
+  "project": "/srv/research",
+  "limit": 100
+}

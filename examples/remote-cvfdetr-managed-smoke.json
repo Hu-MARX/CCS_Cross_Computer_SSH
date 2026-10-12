@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "name": "cvfdetr-managed-checkpoint-smoke",
+  "project": {"path": "/srv/research/cvfdetr"},
+  "runtime": {
+    "workdir": "/srv/research/cvfdetr",
+    "environment_variables": {
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "PYTHONPATH": "/srv/ml-orchestrator/app/src",
+      "PATH": "/home/worker-a/miniconda3/envs/CVFDETR/bin:/usr/local/bin:/usr/bin:/bin"
+    }
+  },
+  "command": {
+    "argv": ["/home/worker-a/miniconda3/envs/CVFDETR/bin/python", "-u", "/srv/ml-orchestrator/app/examples/cvfdetr_managed.py", "--batch-size", "1", "--grad-accum", "1", "--num-workers", "0", "--epochs", "2", "--limit-train-batches", "32", "--max-steps", "20", "--checkpoint-steps", "4"]
+  },
+  "resources": {"gpu_index": 0, "max_duration_seconds": 600, "max_queue_seconds": 60},
+  "outputs": {"artifact_glob": "orchestrator_runs/${RUN_ID}/*.json"},
+  "automation": {"max_attempts": 1, "allowed_actions": ["wait", "complete"]}
+}

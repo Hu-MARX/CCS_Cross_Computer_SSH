@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/schemas/research-project.schema.json",
+  "title": "Research Project Contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "project_id", "title", "research_question", "hypothesis",
+    "scope_boundary", "worker_pool", "analysis_contract", "literature",
+    "manuscript", "budget", "ethics"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "project_id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 8000},
+    "research_question": {"type": "string", "minLength": 1, "maxLength": 8000},
+    "hypothesis": {"type": "string", "minLength": 1, "maxLength": 8000},
+    "scope_boundary": {"type": "string", "minLength": 1, "maxLength": 8000},
+    "worker_pool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config_path", "selection_policy", "expected_workers"],
+      "properties": {
+        "config_path": {"type": "string", "minLength": 1},
+        "selection_policy": {"const": "upper_agent_explicit"},
+        "expected_workers": {
+          "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "analysis_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "independent_unit", "primary_outcome", "effect_size", "uncertainty_interval",
+        "multiplicity", "replication", "randomization", "blinding", "exclusions",
+        "missing_data", "held_out_test"
+      ],
+      "properties": {
+        "independent_unit": {"type": "string", "minLength": 1},
+        "primary_outcome": {"type": "string", "minLength": 1},
+        "effect_size": {"type": "string", "minLength": 1},
+        "uncertainty_interval": {"type": "string", "minLength": 1},
+        "multiplicity": {"type": "string", "minLength": 1},
+        "replication": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["independent_runs", "seed_policy"],
+          "properties": {
+            "independent_runs": {
+              "oneOf": [
+                {"type": "integer", "minimum": 1},
+                {"type": "string", "minLength": 1}
+              ]
+            },
+            "seed_policy": {"type": "string", "minLength": 1}
+          }
+        },
+        "randomization": {"type": "string", "minLength": 1},
+        "blinding": {"type": "string", "minLength": 1},
+        "exclusions": {"type": "string", "minLength": 1},
+        "missing_data": {"type": "string", "minLength": 1},
+        "held_out_test": {"type": "string", "minLength": 1}
+      }
+    },
+    "literature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_path", "raw_archive"],
+      "properties": {
+        "profile_path": {"type": "string", "minLength": 1},
+        "raw_archive": {"type": "string", "minLength": 1}
+      }
+    },
+    "manuscript": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paper_type", "source_language", "target_journal"],
+      "properties": {
+        "paper_type": {"enum": ["research", "methods", "hypothesis", "algorithmic", "review"]},
+        "source_language": {"enum": ["en", "zh-to-en"]},
+        "target_journal": {"type": "string", "minLength": 1}
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_runs", "max_gpu_hours", "max_storage_gb"],
+      "properties": {
+        "max_runs": {"oneOf": [{"type": "number", "exclusiveMinimum": 0}, {"type": "string", "minLength": 1}]},
+        "max_gpu_hours": {"oneOf": [{"type": "number", "exclusiveMinimum": 0}, {"type": "string", "minLength": 1}]},
+        "max_storage_gb": {"oneOf": [{"type": "number", "exclusiveMinimum": 0}, {"type": "string", "minLength": 1}]}
+      }
+    },
+    "ethics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["review_state", "sensitive_data"],
+      "properties": {
+        "review_state": {"type": "string", "minLength": 1},
+        "sensitive_data": {"type": "boolean"}
+      }
+    }
+  }
+}

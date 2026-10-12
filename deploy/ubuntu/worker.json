@@ -1,0 +1,8 @@
+{
+  "backend": "systemd",
+  "monitor_interval": 15,
+  "min_free_bytes": 5368709120,
+  "stall_seconds": {"train": 900, "validation": 1800, "checkpoint": 1800},
+  "logs": {"segment_bytes": 16777216, "max_stream_bytes": 1073741824},
+  "storage": {"sample_retention_days": 30, "backup_keep": 7, "maintenance_interval_seconds": 86400}
+}

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "name": "cvfdetr-snapshot-timed-stop-smoke",
+  "project": {
+    "path": "/srv/research/cvfdetr"
+  },
+  "runtime": {
+    "workdir": "/srv/research/cvfdetr",
+    "environment_variables": {
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "PYTHONPATH": "/srv/ml-orchestrator/app/src",
+      "PATH": "/home/worker-a/miniconda3/envs/CVFDETR/bin:/usr/local/bin:/usr/bin:/bin"
+    }
+  },
+  "command": {
+    "argv": [
+      "/home/worker-a/miniconda3/envs/CVFDETR/bin/python",
+      "-u",
+      "/srv/ml-orchestrator/app/examples/cvfdetr_snapshot.py",
+      "--batch-size",
+      "1",
+      "--grad-accum",
+      "2",
+      "--num-workers",
+      "1",
+      "--epochs",
+      "10000",
+      "--limit-train-batches",
+      "12",
+      "--stop-after-seconds",
+      "10",
+      "--checkpoint-steps",
+      "2"
+    ]
+  },
+  "evidence": {
+    "bundle_id": "bundle_3c4fe93b9c9b46daac480a2e02bfe6ba",
+    "manifest_sha256": "89b5f5a7111e4370fed65242d5f62e68169d14313aaf93636e5ef0e4b744f876",
+    "timeout_seconds": 600,
+    "execution_mode": "snapshot"
+  },
+  "resources": {
+    "gpu_index": 0,
+    "max_duration_seconds": 600,
+    "max_queue_seconds": 60
+  },
+  "outputs": {
+    "artifact_glob": "orchestrator_runs/${RUN_ID}/*.json"
+  },
+  "automation": {
+    "max_attempts": 1,
+    "allowed_actions": [
+      "wait",
+      "complete"
+    ]
+  }
+}

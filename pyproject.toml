@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cross-computer-ssh"
+dynamic = ["version"]
+description = "Evidence-driven orchestration for long-running GPU experiments over SSH"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/Hu-MARX/CCS_Cross_Computer_SSH"
+Documentation = "https://github.com/Hu-MARX/CCS_Cross_Computer_SSH/blob/main/docs/INDEX.md"
+Issues = "https://github.com/Hu-MARX/CCS_Cross_Computer_SSH/issues"
+
+[project.optional-dependencies]
+mcp = ["mcp>=2.2,<3"]
+
+[project.scripts]
+trainctl = "trainctl.cli:main"
+orchestratorctl = "controller.cli:main"
+ccsctl = "controller.gateway_cli:main"
+researchctl = "researchflow.cli:main"
+ccs-mcp = "ccs.mcp_server:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "controller.__version__"}
+
+[tool.setuptools.package-data]
+dashboard = ["web/*.html", "web/*.css", "web/*.js"]
+ccs = ["resources/*.json"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]

@@ -1,0 +1,44 @@
+# Local execution state and generated evidence
+/data/
+/evidence/
+/.trainctl/
+/runs/
+*.db
+*.db-*
+*.sqlite3
+*.sqlite3-*
+*.log
+*.partial
+
+# Machine configuration and credentials (examples are deliberately tracked)
+/config/worker-pool.json
+/config/worker.json
+/config/known_hosts
+/config/*-worker.json
+/.env
+/.env.*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+authorized_keys
+known_hosts
+!*.example.json
+
+# Python, build and local editor files
+__pycache__/
+*.py[cod]
+*.egg-info/
+/.venv/
+/venv/
+/build/
+/dist/
+/.pytest_cache/
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+
+# Generated MCP integration files and local plans
+/mcp-new.json
+/submission-plan.json

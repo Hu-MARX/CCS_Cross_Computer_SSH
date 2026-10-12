@@ -1,0 +1,9 @@
+{
+  "action": "adopt_run",
+  "study_id": "study_2bc7f9831e9d408fb7e4a74ffc783b8e",
+  "stage_id": "train",
+  "run_id": "run_00000000000000000000000000000000",
+  "run_spec_sha256": "eae40269acef42dfebeba61b0b886db4949573f0485465ce8550448d34f0dc60",
+  "idempotency_key": "adopt-cvfdetr-snapshot-50epochs-20260905-v1",
+  "adopted_by": "codex-on-behalf-of-user"
+}

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="本机只读实验观测台：多从机、多任务、进度、通用指标、CPU/GPU、检查点与产物清单。"><title>CCS 实验观测台</title><link rel="stylesheet" href="/dashboard.css"><script src="/dashboard.js" defer></script></head>
+<body>
+<aside class="sidebar"><div class="brand"><span class="brand-mark">∿</span><div>实验观测台<small>EXPERIMENT OBSERVATORY</small></div></div><div class="side-label">当前运行</div><div class="selected"><span class="dot"></span> <span id="task-kind">等待任务</span><small id="side-status">等待连接</small></div><div class="side-label">执行环境</div><dl class="side-details"><dt>从机</dt><dd id="side-worker">等待目录</dd><dt>CCS 接口</dt><dd id="worker-compatibility">等待协商</dd><dt>Python 环境</dt><dd>由任务定义指定</dd><dt>节点设备</dt><dd id="side-gpu">等待资源记录</dd></dl><div class="side-footer"><span class="lock">只读模式</span><p>页面关闭不会停止任务。<br>无启动、取消或配置修改入口。</p><small>数据留在本机与从机之间</small></div></aside>
+<main>
+<div class="task-toolbar"><label for="task-select">选择运行任务</label><select id="task-select" aria-label="选择运行任务"></select><button id="follow-live" type="button">跟随运行中任务</button><button id="export-result" type="button">导出结果 JSON</button></div>
+<p class="muted" id="selection-note" role="status">正在确认当前显示任务…</p>
+<p class="muted" id="catalog-note">读取本机任务目录…</p>
+<section class="worker-panel" aria-labelledby="worker-title">
+<div class="panel-heading"><div><h2 id="worker-title">CCS Worker 池</h2><p>跨服务器可达性、CPU/GPU、内存、磁盘与任务负载事实</p></div><span class="badge neutral" id="worker-count">等待节点</span></div>
+<p class="muted" id="worker-note">读取 Worker 状态…</p>
+<div class="table-scroll worker-table"><table><thead><tr><th>Worker</th><th>节点 / 连接</th><th>状态 / 接口</th><th>计算资源</th><th>负载</th><th>磁盘可用</th><th>标签</th></tr></thead><tbody id="worker-overview"></tbody></table></div>
+</section>
+<section class="active-runs-panel" aria-labelledby="active-runs-title">
+<div class="panel-heading"><div><h2 id="active-runs-title">运行中实验实时数据</h2><p>所有从机上的活跃实验同时展示；点击实验名称进入完整详情</p></div><span class="badge neutral" id="active-run-count">等待目录</span></div>
+<p class="muted" id="active-run-note">正在汇总活跃实验指标…</p>
+<div class="table-scroll active-runs-table"><table><thead><tr><th>实验</th><th>Worker</th><th>轮次 / 进度</th><th>Step</th><th>Loss</th><th>实时学习率</th><th>最近观测</th></tr></thead><tbody id="active-run-overview"></tbody></table></div>
+</section>
+<section class="overview-panel" aria-labelledby="overview-title">
+<div class="panel-heading"><div><h2 id="overview-title">并发任务总览</h2><p>控制端登记的近期任务；点击任务名称切换下方详情</p></div><span class="badge neutral" id="overview-count">等待目录</span></div>
+<div class="overview-counters"><div><span>运行中</span><strong id="overview-running">—</strong></div><div><span>排队/准备</span><strong id="overview-queued">—</strong></div><div><span>已结束</span><strong id="overview-terminal">—</strong></div><div><span>异常/失联</span><strong id="overview-problem">—</strong></div></div>
+<div class="table-scroll overview-table"><table><thead><tr><th>任务</th><th>Worker</th><th>类型</th><th>状态</th><th>进度</th><th>资源</th><th>运行时间</th><th>最近观测</th></tr></thead><tbody id="task-overview"></tbody></table></div>
+<details class="unmanaged"><summary>服务器未托管计算进程 <span id="unmanaged-count" class="badge neutral">等待扫描</span></summary><p id="workload-note" class="muted">只显示经过脱敏的进程名称、脚本文件名和目录末级名称，不读取完整命令行。</p><div class="table-scroll"><table><thead><tr><th>PID</th><th>启动器 / 脚本</th><th>项目</th><th>内存</th><th>状态</th></tr></thead><tbody id="unmanaged-workloads"></tbody></table></div></details>
+</section>
+<section class="workflow-panel" aria-labelledby="workflow-title">
+<div class="panel-heading"><div><h2 id="workflow-title">研究计划与阶段准入</h2><p>Study、Stage、Artifact Binding、Recommendation 与批准状态</p></div><span class="badge neutral" id="workflow-count">等待目录</span></div>
+<p class="muted" id="workflow-note">读取本机工作流数据库…</p>
+<div class="table-scroll workflow-table"><table><thead><tr><th>研究计划</th><th>阶段</th><th>状态</th><th>当前准入条件</th><th>已验证输入</th><th>阶段决策包</th><th>关联 Run</th></tr></thead><tbody id="workflow-stages"></tbody></table></div>
+</section>
+<header><div><div class="eyebrow" id="detail-worker">WORKER / LIVE OBSERVATION</div><h1>实验运行概览</h1><p class="subtitle" id="run-name">正在读取任务记录…</p></div><div class="header-actions"><span id="connection" class="badge neutral">等待首次同步</span><button id="refresh" type="button">刷新显示 ↻</button></div></header>
+<div id="notice" class="notice" role="status" aria-live="polite">仅查询既有监测记录，不扫描训练数据，也不占用训练 GPU。</div>
+<section class="run-strip"><div><span id="state" class="state neutral">未知</span><span id="phase">—</span><span class="divider">/</span><span id="run-id" class="mono">—</span></div><small id="observed">尚无采样</small></section>
+<section class="metrics" aria-label="训练关键指标">
+<article class="metric"><span class="label" id="epoch-label">EPOCH 进度</span><div class="value" id="epoch">—</div><progress id="epoch-progress" max="100" value="0" aria-label="已完成工作比例"></progress><small id="epoch-note">等待进度 · 不预测剩余时间</small></article>
+<article class="metric"><span class="label">实际优化器更新</span><div class="value mono" id="updates">—</div><small id="step">全局步数 —</small></article>
+<article class="metric"><span class="label">最近训练 LOSS</span><div class="value mono" id="loss">—</div><small>监测采样值，不是全量批次记录</small></article>
+<article class="metric"><span class="label">执行与观测</span><div class="value smaller" id="progress-state">等待采样</div><small id="heartbeat">—</small></article>
+</section>
+<section class="panel configuration-panel" aria-label="实验配置与可复现信息">
+<div class="panel-heading"><h2>实验配置与可复现信息</h2><span class="badge neutral">只读 · 来源可追溯</span></div>
+<p id="config-note" class="muted">等待配置记录</p>
+<div class="configuration-cards"><div><span>优化器</span><strong id="config-optimizer">未记录</strong></div><div><span>每设备 batch size</span><strong id="config-batch">未记录</strong></div><div><span>梯度累积</span><strong id="config-accum">未记录</strong></div><div><span>标称有效 batch</span><strong id="config-effective">未记录</strong></div><div><span>基础学习率（配置）</span><strong id="config-lr">未记录</strong></div><div><span>精度</span><strong id="config-precision">未记录</strong></div></div>
+<p id="config-live-lr" class="muted">实时学习率未上报</p>
+<div class="runtime-heading"><h3>训练框架实际状态</h3><span id="runtime-state" class="badge neutral">当前任务未采集</span></div><p id="runtime-note" class="muted">该能力用于部署后的新任务，不注入当前训练。</p><div class="table-scroll runtime-table"><table><tbody id="runtime-values"></tbody></table></div>
+<details><summary>展开全部参数、确认方式与源码证据</summary><div class="table-scroll"><table><thead><tr><th>参数</th><th>值</th><th>确认方式</th><th>来源与说明</th></tr></thead><tbody id="config-values"></tbody></table></div><p class="muted" id="config-review-time">未核对</p><ul id="config-sources"></ul></details>
+</section>
+<section class="workspace">
+<article class="panel chart-panel"><div class="panel-heading"><div><h2>Loss 趋势</h2><p>按已有监测采样绘制 · 无平滑处理</p></div><label class="select-label">曲线<select id="metric"><option value="loss">训练 Loss</option><option value="val_loss">验证 Loss</option></select></label></div><div class="chart-wrap"><canvas id="chart" role="img" aria-label="训练Loss随全局步数变化的采样曲线"></canvas><div id="chart-empty">等待有效的 Loss 采样</div></div><div class="chart-footer"><span><i class="legend"></i><span id="series-name">训练 Loss</span></span><span id="point-count">0 个采样点</span><span>横轴：全局步数</span></div><p class="muted" id="history-note">首次加载可能需要分批补齐历史。</p></article>
+<article class="gpu-panel"><div class="panel-heading"><div><span class="eyebrow">COMPUTE NODE</span><h2 id="gpu-name">计算节点</h2></div><span class="gpu-chip" id="compute-chip">CPU + GPU</span></div><div class="compute-util-grid"><div class="gpu-util"><strong id="gpu-util">—</strong><span>GPU 利用率</span></div><div class="gpu-util"><strong id="cpu-util">—</strong><span>CPU 利用率</span></div></div><div class="gpu-row"><span>显存</span><strong id="gpu-memory">—</strong></div><progress id="gpu-progress" max="100" value="0" aria-label="GPU显存使用比例"></progress><div class="gpu-row resource-row"><span>CPU</span><strong id="cpu-name">—</strong></div><div class="gpu-row"><span>系统内存</span><strong id="system-memory">—</strong></div><progress id="memory-progress" max="100" value="0" aria-label="系统内存使用比例"></progress><div class="gpu-grid resource-grid"><div><span>GPU 温度</span><strong id="gpu-temp">—</strong></div><div><span>CPU 1分钟负载</span><strong id="cpu-load">—</strong></div><div><span>逻辑线程</span><strong id="cpu-cores">—</strong></div><div><span>任务组内存</span><strong id="process-memory">—</strong></div></div><div class="gpu-bottom"><span>磁盘可用</span><strong id="disk-free">—</strong></div><small id="gpu-time">资源数据等待同步</small></article>
+</section>
+<section class="bottom-grid">
+<article class="panel"><div class="panel-heading"><h2>检查点与证据</h2><span class="badge neutral" id="checkpoint-state">等待</span></div><dl class="details"><dt>最近检查点步数</dt><dd id="checkpoint-step">—</dd><dt>提交时间</dt><dd id="checkpoint-time">—</dd><dt>数据重放恢复能力</dt><dd id="checkpoint-safe">尚未报告</dd><dt>运行期证据状态</dt><dd id="evidence">—</dd><dt>大文件完整检查轮数</dt><dd id="rotations">—</dd></dl><p class="hint">执行完整性、部署变化与观测器健康彼此独立；所有“未发现变化”只覆盖已选定且已检查的范围。</p></article>
+<article class="panel"><div class="panel-heading"><h2>当前告警</h2><span class="badge neutral" id="alert-count">—</span></div><div id="alerts" aria-live="polite"><p class="muted">等待告警记录</p></div><p class="hint">仅显示本任务及从机全局告警。失联时保留上次记录，不判定训练失败。</p></article>
+</section>
+<section class="panel result-panel"><div class="panel-heading"><h2>通用指标与结果</h2><span class="badge neutral">观测值 ≠ 科研结论</span></div><p id="metrics-note" class="muted">等待通用指标</p><div class="table-scroll"><table><thead><tr><th>指标</th><th>数值</th><th>上报阶段</th><th>上报时间</th></tr></thead><tbody id="metric-values"></tbody></table></div><dl class="details"><dt>关联来源运行</dt><dd id="task-source">—</dd><dt>输入检查点声明</dt><dd id="task-checkpoint">—</dd><dt>输入版本声明</dt><dd id="task-inputs">—</dd></dl><h3>产物清单</h3><p id="artifact-note" class="muted">等待清单</p><ul id="artifact-list"></ul><p class="hint">导出的是当前缓存中的结构化观测结果，不下载服务器文件。输入哈希是声明，不能替代实际文件校验。</p></section>
+<footer><span id="refresh-note">后台采集间隔 30 秒 · 页面读取本地缓存</span><span>只读展示 · 任务执行策略以各自提交配置为准</span></footer>
+</main>
+</body></html>

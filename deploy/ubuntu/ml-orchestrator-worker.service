@@ -1,0 +1,17 @@
+[Unit]
+Description=ML orchestrator local observation worker
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/srv/ml-orchestrator/venv/bin/python -m trainctl.worker --root /srv/ml-orchestrator
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+MemoryMax=512M
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,19 @@
+# Template for the ccs-runner user service. Replace every absolute path if using
+# another account, and install this file under that user's ~/.config/systemd/user/.
+[Unit]
+Description=CCS project-owner observation worker
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/ccs-runner/.local/share/ccs-venv/bin/python -m trainctl.worker --root /home/ccs-runner/.local/state/ccs-worker
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+MemoryMax=512M
+
+[Install]
+WantedBy=default.target

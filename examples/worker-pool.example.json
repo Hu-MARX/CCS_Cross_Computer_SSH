@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "workers": [
+    {
+      "id": "worker-a",
+      "host": "ccs-worker",
+      "user": "mlrunner",
+      "workspace_user": "worker-a",
+      "labels": ["ubuntu22", "cuda", "vision"]
+    },
+    {
+      "id": "second-server",
+      "host": "second-server.example-tailnet.ts.net",
+      "user": "mlrunner",
+      "workspace_user": "researcher",
+      "labels": ["ubuntu22", "cuda", "embodied"]
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "request_id": "rfdetr-recovery-smoke-snapshot-20260906-v1",
+  "actor": {"id": "codex-local", "kind": "agent"},
+  "action": "run.snapshot",
+  "dry_run": false,
+  "payload": {"run_id": "run_00000000000000000000000000000000"}
+}

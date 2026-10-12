@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "name": "remote-trainctl-smoke",
+  "project": {"repository": "cross-computer-ssh-examples"},
+  "runtime": {"workdir": "/srv/ml-orchestrator/app/examples"},
+  "command": {"argv": ["python3", "smoke.py"]},
+  "outputs": {"artifact_glob": "smoke-output.txt"},
+  "automation": {"max_attempts": 1, "allowed_actions": ["wait", "complete"]}
+}

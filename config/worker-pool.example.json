@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "workers": [
+    {
+      "id": "worker-a",
+      "host": "ccs-worker",
+      "user": "ccs-runner",
+      "remote_root": "/home/ccs-runner/.local/state/ccs-worker",
+      "trainctl_executable": "/home/ccs-runner/.local/share/ccs-venv/bin/trainctl",
+      "known_hosts": "C:/Users/YOUR_USER/.ssh/known_hosts",
+      "identity_file": "C:/Users/YOUR_USER/.ssh/id_ed25519",
+      "labels": ["cpu"],
+      "enabled": true
+    }
+  ]
+}

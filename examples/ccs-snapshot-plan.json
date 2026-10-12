@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "request_id": "snapshot-plan-001",
+  "actor": {"id": "codex-local", "kind": "agent"},
+  "action": "run.snapshot",
+  "dry_run": true,
+  "payload": {"run_id": "run_00000000000000000000000000000000"}
+}

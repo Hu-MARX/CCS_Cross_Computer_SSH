@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "ccs": {
+      "command": "C:/path/to/venv/Scripts/python.exe",
+      "args": [
+        "-m",
+        "ccs.mcp_server",
+        "--command-json",
+        "[\"C:/path/to/venv/Scripts/python.exe\", \"-m\", \"controller.gateway_cli\", \"--fleet\", \"C:/path/to/CCS/config/worker-pool.json\", \"--db\", \"C:/path/to/CCS/data/orchestrator.db\", \"--audit-db\", \"C:/path/to/CCS/data/ccs-audit.db\"]",
+        "--cwd",
+        "C:/path/to/CCS",
+        "--timeout",
+        "120",
+        "--actor-id",
+        "mcp-agent",
+        "--read-only"
+      ]
+    }
+  }
+}

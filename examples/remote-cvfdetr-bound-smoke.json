@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "name": "cvfdetr-evidence-bound-smoke",
+  "project": {"path": "/srv/research/cvfdetr"},
+  "runtime": {
+    "workdir": "/srv/research/cvfdetr",
+    "environment_variables": {
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "PYTHONPATH": "/srv/ml-orchestrator/app/src",
+      "PATH": "/home/worker-a/miniconda3/envs/CVFDETR/bin:/usr/local/bin:/usr/bin:/bin"
+    }
+  },
+  "command": {
+    "argv": ["/home/worker-a/miniconda3/envs/CVFDETR/bin/python", "-u", "/srv/ml-orchestrator/app/examples/cvfdetr_replay.py", "--batch-size", "1", "--grad-accum", "2", "--num-workers", "1", "--epochs", "2", "--limit-train-batches", "12", "--max-steps", "8", "--checkpoint-steps", "2"]
+  },
+  "evidence": {
+    "bundle_id": "bundle_7b2c8458423140cab56ccf2446432820",
+    "manifest_sha256": "432b537935dd95ef913690bcaaea5f138b8aaf2388cbf20870c804a4b8780fa1",
+    "timeout_seconds": 600
+  },
+  "resources": {"gpu_index": 0, "max_duration_seconds": 600, "max_queue_seconds": 60},
+  "outputs": {"artifact_glob": "orchestrator_runs/${RUN_ID}/*.json"},
+  "automation": {"max_attempts": 1, "allowed_actions": ["wait", "complete"]}
+}

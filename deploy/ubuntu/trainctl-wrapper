@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH="/srv/ml-orchestrator/app/src${PYTHONPATH:+:$PYTHONPATH}"
+if [[ -x /srv/ml-orchestrator/venv/bin/python ]]; then
+  exec /srv/ml-orchestrator/venv/bin/python -m trainctl.cli "$@"
+fi
+exec /usr/bin/python3 -m trainctl.cli "$@"

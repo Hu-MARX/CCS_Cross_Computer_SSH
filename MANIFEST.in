@@ -1,0 +1,12 @@
+include pyproject.toml MANIFEST.in README.md CHANGELOG.md AGENTS.md .gitignore .gitattributes
+recursive-include config *.example.json
+recursive-include src *.py *.json *.html *.css *.js
+recursive-include tests *
+recursive-include scripts *.py *.ps1
+recursive-include schemas *.json
+recursive-include docs *.md *.json
+recursive-include examples *.py *.json
+recursive-include deploy *.md *.service *.timer *.sh *.ps1 *.json
+global-exclude __pycache__ *.py[cod]
+prune data
+prune .venv

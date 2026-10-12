@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "request_id": "rfdetr-50epochs-submit-20260906-v2",
+  "actor": {"id": "codex-local", "kind": "agent"},
+  "action": "run.submit",
+  "dry_run": false,
+  "confirm_plan_sha256": "eb6f13fabc092081e0c1347f1aee10124553bcc04f5ce69ec4ca863c3a3399f8",
+  "payload": {
+    "worker_id": "worker-b",
+    "idempotency_key": "rfdetr-50epochs-20260906-v2",
+    "spec": {
+      "schema_version": 1,
+      "name": "rfdetr-single-view-managed-50epochs",
+      "project": {"path": "/srv/research/rf-detr"},
+      "runtime": {
+        "workdir": "/srv/research/rf-detr",
+        "environment_variables": {
+          "PYTHONDONTWRITEBYTECODE": "1",
+          "PYTHONPATH": "/home/ubuntu/.ml-orchestrator/app/src",
+          "PATH": "/home/ubuntu/anaconda3/envs/RFDETR/bin:/usr/local/bin:/usr/bin:/bin",
+          "HF_HUB_OFFLINE": "1",
+          "WANDB_MODE": "disabled",
+          "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
+          "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"
+        }
+      },
+      "command": {
+        "argv": [
+          "/home/ubuntu/anaconda3/envs/RFDETR/bin/python", "-u",
+          "/home/ubuntu/.ml-orchestrator/app/examples/rfdetr_managed.py",
+          "--epochs", "50", "--batch-size", "2", "--grad-accum", "4",
+          "--num-workers", "0"
+        ]
+      },
+      "resources": {"gpu_index": 0},
+      "outputs": {"checkpoint_glob": "orchestrator_runs/${RUN_ID}/checkpoints/*.ckpt"},
+      "automation": {"max_attempts": 1, "allowed_actions": ["wait", "complete"]},
+      "task": {"kind": "train", "inputs": []}
+    }
+  }
+}
