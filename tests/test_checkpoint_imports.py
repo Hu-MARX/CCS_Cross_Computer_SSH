@@ -69,7 +69,17 @@ class CheckpointImportTests(unittest.TestCase):
             prepared = store.prepare(self.request())
             Path(prepared['upload_path']).write_bytes(self.payload)
             committed = store.commit(prepared['import_id'])
-            Path(committed['checkpoint_path']).write_bytes(b'corrupt')
+            checkpoint = Path(committed['checkpoint_path'])
+            original_mode = stat.S_IMODE(checkpoint.stat().st_mode)
+            if os.name == 'posix':
+                self.assertFalse(original_mode & 0o222)
+                # Deliberate owner fault injection must bypass the normal seal.
+                checkpoint.chmod(original_mode | stat.S_IWUSR)
+            try:
+                checkpoint.write_bytes(b'corrupt')
+            finally:
+                if os.name == 'posix':
+                    checkpoint.chmod(original_mode)
 
             with self.assertRaises(TrainCtlError):
                 store.show(prepared['import_id'])

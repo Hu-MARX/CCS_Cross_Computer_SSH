@@ -43,6 +43,23 @@ class SnapshotTests(WorkerFixture, unittest.TestCase):
             'resources': {'max_duration_seconds': 10}, 'evidence': binding})
         return source, spec
 
+    def materialize_snapshot_fixture(self, run_dir, spec):
+        evidence = EvidenceStore(self.store.root / 'evidence')
+        manifest = evidence.manifest(spec.evidence['bundle_id'], spec.evidence['manifest_sha256'])
+        if os.name == 'posix':
+            # Exercise the actual 0444-file/0555-directory publication contract.
+            prepare(run_dir, spec.evidence, manifest)
+            return
+        # Snapshot execution is POSIX-only, while observer scope/race semantics
+        # can still be tested with synthetic snapshot bytes on Windows.
+        for row in manifest['files']:
+            if row['mode'] != 'copy':
+                continue
+            copied = evidence.root / spec.evidence['bundle_id'] / 'files' / row['group'] / row['path']
+            snapshot = run_dir / 'source-snapshot' / row['group'] / row['path']
+            snapshot.parent.mkdir(parents=True, exist_ok=True)
+            snapshot.write_bytes(copied.read_bytes())
+
     def test_incremental_hash_detects_same_size_edit_and_remembers_restoration(self):
         source, spec = self.fixture()
         run_dir = self.store.runs / ('run_' + 'a' * 32)
@@ -85,16 +102,7 @@ class SnapshotTests(WorkerFixture, unittest.TestCase):
         spec.evidence['execution_mode'] = 'snapshot'
         run_dir = self.store.runs / ('run_' + 'c' * 32)
         run_dir.mkdir()
-        evidence = EvidenceStore(self.store.root / 'evidence')
-        manifest = evidence.manifest(
-            spec.evidence['bundle_id'], spec.evidence['manifest_sha256'])
-        for row in manifest['files']:
-            if row['mode'] != 'copy':
-                continue
-            copied = evidence.root / spec.evidence['bundle_id'] / 'files' / row['group'] / row['path']
-            snapshot = run_dir / 'source-snapshot' / row['group'] / row['path']
-            snapshot.parent.mkdir(parents=True, exist_ok=True)
-            snapshot.write_bytes(copied.read_bytes())
+        self.materialize_snapshot_fixture(run_dir, spec)
         audit = Auditor(run_dir, spec.evidence)
         (source / 'lazy.py').write_text("VALUE = 'new development'")
         audit.fast_pass()
@@ -111,14 +119,7 @@ class SnapshotTests(WorkerFixture, unittest.TestCase):
         spec.evidence['execution_mode'] = 'snapshot'
         run_dir = self.store.runs / ('run_' + 'd' * 32)
         run_dir.mkdir()
-        evidence = EvidenceStore(self.store.root / 'evidence')
-        manifest = evidence.manifest(spec.evidence['bundle_id'], spec.evidence['manifest_sha256'])
-        for row in manifest['files']:
-            if row['mode'] == 'copy':
-                copied = evidence.root / spec.evidence['bundle_id'] / 'files' / row['group'] / row['path']
-                snapshot = run_dir / 'source-snapshot' / row['group'] / row['path']
-                snapshot.parent.mkdir(parents=True, exist_ok=True)
-                snapshot.write_bytes(copied.read_bytes())
+        self.materialize_snapshot_fixture(run_dir, spec)
         original_read = evidence_watch._read
 
         def read_with_deployment_race(path, *args, **kwargs):

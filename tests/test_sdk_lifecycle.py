@@ -38,7 +38,11 @@ def alive(pid):
     try:
         if sys.platform.startswith('linux'):
             stat = Path(f'/proc/{pid}/stat')
-            if stat.exists() and stat.read_text().rpartition(')')[2].lstrip().startswith('Z'):
+            try:
+                state = stat.read_text().rpartition(')')[2].lstrip()
+            except FileNotFoundError:
+                return False
+            if state.startswith('Z'):
                 return False
         os.kill(pid, 0)
         return True
@@ -51,6 +55,21 @@ class LifecycleTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(prefix='ccs lifecycle 中文 ')
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
+
+    def assert_processes_stopped(self, pids, *, context):
+        # SIGKILL/job termination is asynchronous. Reaped parents and detached
+        # descendant pipes do not wait for every descendant's final transition.
+        # Still fail on any real survivor after this bounded observation window.
+        deadline = time.monotonic() + 2
+        pending = list(pids)
+        wake = threading.Event()
+        while pending:
+            pending = [pid for pid in pending if alive(pid)]
+            remaining = deadline - time.monotonic()
+            if not pending or remaining <= 0:
+                break
+            wake.wait(min(0.02, remaining))
+        self.assertFalse(pending, f'{context}: local processes still alive after 2 seconds: {pending}')
 
     def test_stdout_and_stderr_overflow_retains_only_budget(self):
         code = "import os,threading; t=threading.Thread(target=lambda:os.write(2,b'e'*2000000)); t.start(); os.write(1,b'o'*2000000); t.join()"
@@ -116,8 +135,7 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(errors[0].code, 'GATEWAY_CANCELLED')
         self.assertEqual(errors[0].execution_state, 'unknown')
         self.assertEqual(errors[0].idempotency_key, 'one')
-        for pid in pids:
-            self.assertFalse(alive(pid), f'local descendant {pid} survived cancellation')
+        self.assert_processes_stopped(pids, context='cancellation cleanup')
 
     def test_postspawn_reader_start_failure_is_unknown_and_kills_child(self):
         children = []
@@ -136,15 +154,29 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(caught.exception.execution_state, 'unknown')
         self.assertEqual(caught.exception.idempotency_key, 'same')
         self.assertEqual(len(children), 1)
-        self.assertFalse(alive(children[0].pid))
+        self.assert_processes_stopped([children[0].pid], context='reader startup failure cleanup')
 
     def test_cleanup_failure_before_native_cleanup_still_kills_immediate_descendant(self):
         marker = self.root / 'cleanup-pids.json'
-        code = ("import json,os,subprocess,sys; from pathlib import Path; "
-                "child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)'], "
-                "stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); "
-                "Path(sys.argv[1]).write_text(json.dumps([os.getpid(),child.pid])); "
-                "sys.stdin.buffer.read(); print('not json')")
+        child_code = ("import json,os,subprocess,sys,time; from pathlib import Path; "
+                      "grandchild=subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)'], "
+                      "stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); "
+                      "Path(sys.argv[1]+'.tmp').write_text(json.dumps([os.getpid(),grandchild.pid])); "
+                      "os.replace(sys.argv[1]+'.tmp',sys.argv[1]); time.sleep(60)")
+        code = f"""import json,os,subprocess,sys,time
+from pathlib import Path
+child_marker = Path(sys.argv[1] + '.child')
+child = subprocess.Popen([sys.executable, '-c', {child_code!r}, str(child_marker)],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+deadline = time.monotonic() + 5
+while not child_marker.exists() and time.monotonic() < deadline:
+    time.sleep(0.02)
+if not child_marker.exists():
+    raise RuntimeError('descendant fixture did not start')
+Path(sys.argv[1]).write_text(json.dumps([os.getpid(), *json.loads(child_marker.read_text())]))
+sys.stdin.buffer.read()
+print('not json')
+"""
         original_group_kill = getattr(os, 'killpg', None)
         kill_attempts = []
 
@@ -160,8 +192,9 @@ class LifecycleTests(unittest.TestCase):
             with self.assertRaises(CCSError) as caught:
                 CCSClient([sys.executable, '-c', code, str(marker)]).request('run.submit', {}, dry_run=False)
         self.assertEqual(caught.exception.execution_state, 'unknown')
-        for pid in json.loads(marker.read_text()):
-            self.assertFalse(alive(pid), f'descendant {pid} survived failed cleanup wrapper')
+        pids = json.loads(marker.read_text())
+        self.assertEqual(len(pids), 3, 'fixture must observe the gateway, child and grandchild')
+        self.assert_processes_stopped(pids, context='failed cleanup wrapper fallback')
 
     def test_bounded_sdk_response_has_truncation_and_continuation(self):
         code = 'import sys; sys.stdin.buffer.read(); sys.stdout.buffer.write(b"x"*2000000)'

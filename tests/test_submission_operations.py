@@ -74,6 +74,7 @@ class SubmissionOperationTests(unittest.TestCase):
                 self.assertEqual(raised.exception.execution_state, 'unknown')
                 self.assertFalse(raised.exception.retryable)
                 # A blocked SSH dispatch holds no SQLite write transaction.
+                self.assertTrue(remote.entered.wait(timeout=3), 'winning caller did not reach dispatch')
                 other, available = self.repository.reserve_submission(spec(), 'worker-a', 'other-key')
                 self.assertTrue(available)
                 self.assertEqual(other['state'], 'pending')
@@ -100,10 +101,16 @@ class SubmissionOperationTests(unittest.TestCase):
             try:
                 completed, _ = wait(futures, timeout=3, return_when=FIRST_COMPLETED)
                 self.assertEqual(len(completed), 1)
+                loser = next(iter(completed))
                 with self.assertRaises(SubmissionError) as raised:
-                    next(iter(completed)).result()
+                    loser.result()
                 self.assertEqual(raised.exception.code, 'IDEMPOTENCY_CONFLICT')
                 self.assertEqual(raised.exception.execution_state, 'not_sent')
+                # The losing reservation can finish before the winner reaches SSH.
+                winner_index = next(index for index, future in enumerate(futures) if future is not loser)
+                self.assertTrue(remotes[winner_index].entered.wait(timeout=3),
+                                'winning caller did not reach dispatch')
+                self.assertFalse(remotes[futures.index(loser)].entered.is_set())
                 self.assertEqual(sum(remote.submit_count for remote in remotes), 1)
             finally:
                 for remote in remotes:
@@ -112,6 +119,7 @@ class SubmissionOperationTests(unittest.TestCase):
         operation = self.repository.get_operation(idempotency_key='shared-key')
         self.assertEqual(operation['state'], 'confirmed')
         self.assertEqual(operation['run_id'], winner.id)
+        self.assertEqual(sum(remote.submit_count for remote in remotes), 1)
         self.assertEqual(sum(len(remote.runs) for remote in remotes), 1)
 
     def test_changed_spec_is_rejected_before_remote(self):
