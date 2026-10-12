@@ -18,6 +18,8 @@
   旧的无效 `--install-dir` 明确报错；`--source` 仍是原地 editable 安装，源目录不能删除。
 - 指南修正 SDK 默认 4 个执行槽（MCP 默认 2 个）与提交结果的 `result.id`。
 - 增加 GitHub Actions 的 Windows/Linux 核心、MCP 和 JavaScript 分组验证，保留 JSON 记录。
+- CI 使用规范化临时目录，避免 Windows 短路径别名触发路径保护；仅文档变更不重复运行完整矩阵。
+- 修正 POSIX 只读夹具的损坏注入与 snapshot 封存、异步子进程终止观察及并发派发断言；产品保护逻辑保持原样。
 
 ## 本地验收
 
@@ -27,10 +29,15 @@ Windows / Python 3.11.15：核心 449 项中 **435 通过、14 跳过**，MCP �
 
 core、MCP 2.2.0、MCP 2.3.0 的 wheel/sdist 共六套独立安装通过，验收范围见 [支持矩阵](SUPPORT-MATRIX.md)。
 公开发布检查只记录文件名、摘要和候选类别，不输出凭据。
-GitHub Actions 的实际运行结果在 Actions 页面查看，不能把工作流配置当作已通过。
+源码修正提交 `21321bc19413c32a26b7664f783e8d55f44b9991` 的 [GitHub Actions](https://github.com/Hu-MARX/CCS_Cross_Computer_SSH/actions/runs/38278526903)
+六组全部通过：Linux 核心 449 项中 **440 通过、9 跳过**；Windows 核心 449 项中
+**437 通过、12 跳过**；MCP 2.2.0/2.3.0 在两个平台均通过；Linux JavaScript **27 通过**。
+9 项共同跳过为可选训练环境缺失，Windows 额外 3 项是平台限制。
+[初次失败记录](https://github.com/Hu-MARX/CCS_Cross_Computer_SSH/actions/runs/38276572172) 保留，以上结果属于修正后的独立运行。
 
 ## 边界
 
-本次未部署或操作实际 worker。Linux 原生安装/权限/进程及真实远端故障验收仍需要独立记录；
+本次未部署或操作实际 worker。Linux 原生源码权限与进程验收已由 CI 覆盖；
+Linux 独立 wheel/sdist 安装及真实远端故障验收仍需独立记录。
 本地 Fake Worker、CPU fixture、byte-copy 成功不能代替模型真实恢复或多节点训练验收。
 原 0.6.0 首轮失败与补测证据仍在发布者本地保留，不作为新版本一次无失败的完整运行。
