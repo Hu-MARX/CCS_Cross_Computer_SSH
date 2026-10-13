@@ -29,7 +29,6 @@ class CooperativePauseWorkerTests(unittest.TestCase):
         self.gpu.start()
         self.started = []
         self.supervisors = []
-        self.supervisor_runs = {}
 
     def tearDown(self):
         try:
@@ -61,7 +60,6 @@ class CooperativePauseWorkerTests(unittest.TestCase):
         })
         if start:
             real_popen = subprocess.Popen
-            before = len(self.supervisors)
 
             def launch(*args, **kwargs):
                 process = real_popen(*args, **kwargs)
@@ -70,7 +68,6 @@ class CooperativePauseWorkerTests(unittest.TestCase):
             with patch('trainctl.run_store.subprocess.Popen', side_effect=launch):
                 value = self.store.submit(spec, str(len(self.started)))
             self.started.append(value['run_id'])
-            self.supervisor_runs[value['run_id']] = self.supervisors[before:]
         else:
             with patch.object(self.store, '_start_runner', return_value=0):
                 value = self.store.submit(spec, str(len(list(self.store.runs.iterdir()))))
@@ -80,11 +77,7 @@ class CooperativePauseWorkerTests(unittest.TestCase):
         for _ in range(150):
             result = self.store.snapshot(run_id)
             if RunStatus(result['status']).terminal:
-                for process in self.supervisor_runs.get(run_id, []):
-                    process.wait(timeout=20)
-                # The public terminal record remains authoritative, but fixture
-                # consumers now observe it after all supervisor handles close.
-                return self.store.snapshot(run_id)
+                return result
             time.sleep(0.1)
         self.fail('local supervisor did not finish')
 
