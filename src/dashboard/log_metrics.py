@@ -17,6 +17,20 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from controller.configuration import read_configuration
 from .feed import atomic_json, now, age
+from .checkpoint_projection import (
+    ordinary_progress_point, training_snapshot, checkpoint_log_event, recovery_projection, binding_digest,
+)
+
+
+def metric_freshness_seconds(binding):
+    """Collection freshness accommodates declared log cadence, not liveness."""
+    expected = binding.get('expected_metric_interval_seconds')
+    if expected is None:
+        return 90
+    if type(expected) not in (int, float) or not math.isfinite(expected) or not 1 <= expected <= 86400:
+        raise ValueError('Invalid expected metric interval; require finite 1..86400 seconds')
+    # Two expected output periods plus this bridge's 30-second polling interval.
+    return max(90, 2 * expected + 30)
 
 
 def consume(state, page, run_id, expected_config, max_steps, collected_at, binding=None):
@@ -49,6 +63,12 @@ def consume(state, page, run_id, expected_config, max_steps, collected_at, bindi
                     raise ValueError('Training launch schedule mismatch')
             state['verified'] = True
             state['launch'] = item
+        if item.get('event') == 'checkpoint_committed' and state.get('verified'):
+            point = state['points'][-1] if state['points'] else None
+            checkpoint = checkpoint_log_event(item, binding, expected_config, point, collected_at)
+            if checkpoint and checkpoint['step'] >= state.get('checkpoint', {}).get('step', 0):
+                state['checkpoint'] = checkpoint
+                state['checkpoint_binding_sha256'] = binding_digest(binding)
         if item.get('event') != 'training_progress' or not state.get('verified'):
             continue
         if binding and binding.get('format') == 'fullfit_v1':
@@ -57,21 +77,11 @@ def consume(state, page, run_id, expected_config, max_steps, collected_at, bindi
             if not state['points'] or point['step'] > state['points'][-1]['step']:
                 state['points'].append(point)
             continue
-        step, loss, lr = item.get('step'), item.get('loss'), item.get('lr')
-        if (type(step) is not int or not 0 < step <= max_steps
-                or type(loss) not in (int, float) or not math.isfinite(loss)
-                or not isinstance(lr, list) or not 1 <= len(lr) <= 1024
-                or any(type(v) not in (int, float) or not math.isfinite(v) or v < 0 for v in lr)):
-            raise ValueError('Invalid training progress event')
+        point = ordinary_progress_point(item, max_steps, collected_at)
+        step = point['step']
         if state['points'] and step <= state['points'][-1]['step']:
             continue
-        metrics = {'train/loss': loss, 'lr/min': min(lr), 'lr/max': max(lr),
-                   'progress/completed': step, 'progress/total': max_steps}
-        elapsed = item.get('wall_seconds')
-        if type(elapsed) in (int, float) and math.isfinite(elapsed) and elapsed >= 0:
-            metrics['train/elapsed_seconds'] = elapsed
-        state['points'].append(dict(at=collected_at,step=step,loss=loss,phase='train',
-                                   epoch=None,val_loss=None,map=None,metrics=metrics))
+        state['points'].append(point)
     while len(state['points']) > 6000:
         mid = len(state['points'])//2
         state['points'] = state['points'][:mid:2]+state['points'][mid:]
@@ -117,16 +127,19 @@ class LogBridge:
             return
         if binding.get('worker_id') != self.task['worker']:
             raise ValueError('Log bridge worker binding mismatch')
+        metric_freshness_seconds(binding)
         with self.lock:
             state = copy.deepcopy(self.state)
-        if state.get('config_sha256') != binding['config_sha256']:
-            state = {'config_sha256':binding['config_sha256']}
+        fingerprint = binding_digest(binding)
+        if (state.get('config_sha256') != binding['config_sha256']
+                or state.get('binding_sha256') != fingerprint):
+            state = {'config_sha256':binding['config_sha256'], 'binding_sha256':fingerprint}
         errors = []
         # Only two bounded read-only requests; current progress does not wait for log history.
         pool = ThreadPoolExecutor(max_workers=2)
         log_future = pool.submit(self.query, 'run.logs', dict(run_id=self.task['run_id'],
             worker_id=self.task['worker'], stream='stdout', after_offset=state.get('offset', 0)))
-        if binding.get('format') == 'fullfit_v1' and binding.get('snapshot'):
+        if binding.get('format') in ('fullfit_v1', 'training_progress_v1') and binding.get('snapshot'):
             try:
                 from .fullfit_metrics import report_snapshot
                 target = binding['snapshot']
@@ -136,7 +149,8 @@ class LogBridge:
                 if (len(content) > 256*1024 or hashlib.sha256(content).hexdigest() != result['sha256']
                         or result.get('project') != target['project'] or result.get('path') != target['path']):
                     raise ValueError('Progress report readback mismatch')
-                snapshot = report_snapshot(json.loads(content), binding, now())
+                adapter = report_snapshot if binding.get('format') == 'fullfit_v1' else training_snapshot
+                snapshot = adapter(json.loads(content), binding, now())
                 if snapshot['point']['step'] < state.get('snapshot', {}).get('point', {}).get('step', 0):
                     raise ValueError('Progress snapshot moved backwards')
                 state['snapshot'] = snapshot
@@ -173,43 +187,75 @@ class LogBridge:
     def supplement(self, result):
         if result['run_id'] != self.task['run_id']:
             return result
+        latest = result.get('latest') or {}
+        result['recovery'] = recovery_projection(latest)
         config = read_configuration(self.config_dir,self.task)
         if config.get('state') != 'available':
             return result
         result['configuration'] = config
+        binding = config.get('log_bridge') or {}
+        if self.task.get('worker') and binding.get('worker_id') != self.task['worker']:
+            return result
         with self.lock:
             s = copy.deepcopy(self.state)
+        fingerprint = binding_digest(binding)
+        if s.get('binding_sha256') is not None and s['binding_sha256'] != fingerprint:
+            return result
+        if (s.get('snapshot') or {}).get('binding_sha256') != fingerprint:
+            s.pop('snapshot', None)
         if (((not s.get('verified') or not s.get('points')) and not s.get('snapshot'))
                 or s.get('config_sha256') != config.get('log_bridge',{}).get('config_sha256')):
             return result
-        points = list(s.get('points', []))
+        points = list(s.get('points', [])) if s.get('verified') else []
+        logged_step = points[-1]['step'] if points else None
         snapshot = s.get('snapshot')
+        progress_source = 'CCS stdout training_progress'
         if snapshot and (not points or snapshot['point']['step'] > points[-1]['step']):
             points.append(snapshot['point'])
+            progress_source = 'bound trainer progress report'
         p = points[-1]
-        # Native samples win if they already report progress.
-        latest = result.get('latest') or {}
-        if latest.get('step') is not None:
-            return result
-        result['points'] = points
-        latest.update(step=p['step'],loss=p['loss'],phase='train',metrics=p['metrics'],
-                      metrics_at=p['at'],updates=p.get('updates', p['step']))
-        binding = config['log_bridge']
+        reported_candidates = [(snapshot or {}).get('checkpoint'),
+            s.get('checkpoint') if s.get('checkpoint_binding_sha256') == fingerprint else None]
+        reported = max((item for item in reported_candidates if item),
+                       key=lambda item: item['step'], default=None)
+        # Keep native metrics authoritative, but never discard independent
+        # checkpoint facts merely because a native progress step is available.
+        result['recovery'] = recovery_projection(latest, logged_step=logged_step,
+            reported=reported, reported_progress_step=p['step'], progress_source=progress_source)
+        checkpoint = latest.get('checkpoint') or {}
+        if reported and checkpoint.get('state') != 'committed' and checkpoint.get('safe_to_resume') is not False and checkpoint.get('state') != 'failed':
+            latest['checkpoint'] = reported
+        native_progress = latest.get('step') is not None
+        if not native_progress:
+            result['points'] = points
+            latest.update(step=p['step'],loss=p['loss'],phase='train',metrics=p['metrics'],
+                          metrics_at=p['at'],updates=p.get('updates', p['step']))
         if binding.get('format') == 'fullfit_v1':
-            latest['epoch'] = p['epoch']
+            if not native_progress:
+                latest['epoch'] = p['epoch']
             result['epochs'] = binding['epochs']
-            if snapshot and snapshot.get('checkpoint') and not (latest.get('checkpoint') or {}).get('state'):
-                latest['checkpoint'] = snapshot['checkpoint']
         elif binding.get('steps_per_epoch'):
-            latest['epoch'] = p['step']//binding['steps_per_epoch']
+            if not native_progress:
+                latest['epoch'] = p['step']//binding['steps_per_epoch']
             result['epochs'] = binding['epochs']
         # Do not set status, lifecycle freshness, training-event time or advancing.
         result['latest'] = latest
-        result['downsampled'] = s.get('downsampled',False)
-        result['log_metrics'] = dict(source='CCS stdout training_progress',
+        if not native_progress:
+            result['downsampled'] = s.get('downsampled',False)
+        metric_error = s.get('error')
+        try:
+            freshness_seconds = metric_freshness_seconds(binding)
+        except ValueError as exc:
+            metric_error = '; '.join(value for value in (metric_error, str(exc)) if value)
+            freshness_seconds = 90
+        collected_age = age(p['at'])
+        result['log_metrics'] = dict(source=progress_source,
             config_sha256=s['config_sha256'],collected_at=p['at'],
             timestamp_basis='local collection time; x-axis is logged global batch step',
             epoch_basis='reported_fullfit' if binding.get('format') == 'fullfit_v1' else 'nominal_steps',
-            error=s.get('error'),has_more=s.get('has_more'),
-            fresh=not s.get('error') and (age(p['at']) or 0)<90)
+            error=metric_error,has_more=s.get('has_more'),
+            freshness_threshold_seconds=freshness_seconds,
+            expected_metric_interval_seconds=binding.get('expected_metric_interval_seconds'),
+            freshness_basis='local collection age; not evidence of training advancement',
+            fresh=not metric_error and collected_age is not None and collected_age < freshness_seconds)
         return result

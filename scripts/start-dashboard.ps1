@@ -15,8 +15,24 @@ if (Test-Path -LiteralPath $runtime) {
         if ($result.run_id -eq $info.run_id) { $url = $info.url }
     } catch { $url = $null }
 }
-if ($url -and $RunId -and $info.run_id -ne $RunId) {
-    throw 'Dashboard serves a different Run; stop this local dashboard before changing its primary Run.'
+if ($url -and $result.dashboard_runtime.restart_required) {
+    Write-Warning 'Dashboard source changed since startup. Restart this local dashboard to load the new code; remote training is unaffected.'
+}
+if ($url -and $RunId) {
+    if (-not $result.collector_focus) {
+        if ($info.run_id -ne $RunId) {
+            throw 'Running dashboard predates dynamic focus. Restart only this local dashboard once to enable it; do not stop remote training.'
+        }
+    } else {
+        # This authenticated same-origin preference changes only read collection.
+        # It cannot submit, cancel, restart or move any remote Run.
+        $base = "http://127.0.0.1:{0}" -f $Port
+        $focus = Invoke-RestMethod -Uri ($base + '/api/focus') -Method Post `
+            -Headers @{Authorization = 'Bearer ' + $uri.Fragment.TrimStart('#'); Origin = $base} `
+            -ContentType 'application/json' -Body (@{run_id = $RunId} | ConvertTo-Json -Compress) -TimeoutSec 5
+        if ($focus.run_id -ne $RunId) { throw 'Dashboard focus acknowledgement differs from the selected Run.' }
+        $url = $base + '/?run_id=' + [Uri]::EscapeDataString($RunId) + '&follow=1' + $uri.Fragment
+    }
 }
 if (-not $url) {
     if (-not $Python) {

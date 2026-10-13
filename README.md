@@ -2,7 +2,7 @@
 
 CCS 是通过 SSH 管理可信 Linux worker 的执行层。它为本地 Agent、Python 程序和人工操作者提供统一的 JSON 接口，支持长任务、worker 状态查询、事件与日志读取、检查点迁移、受控工作区操作和审计记录。
 
-当前版本为 **0.6.1**。控制端、CLI 和 Python SDK 只依赖 Python 标准库；可选 MCP 适配器通过 stdio 接入。
+当前源码候选版本为 **0.6.2**；发布及验收边界见 [0.6.2 记录](docs/RELEASE-0.6.2.md)。控制端、CLI 和 Python SDK 只依赖 Python 标准库；可选 MCP 适配器通过 stdio 接入。
 
 ## 能做什么
 
@@ -65,6 +65,8 @@ Copy-Item .\config\worker-pool.example.json .\config\worker-pool.json
 | 请求格式与动作字段 | [协议](docs/CCS-AGENT-INTERFACE.md)、[动作参考](docs/ACTION-CONTRACTS.md) |
 | 分页、超时、取消和恢复游标 | [Paged reads](docs/PAGED-READS.md)、[SDK lifecycle](docs/sdk-lifecycle.md) |
 | 检查点迁移与模型恢复边界 | [Checkpoint replication](docs/CHECKPOINT-REPLICATION.md)、[Model adapters](docs/MODEL-RECOVERY-ADAPTERS.md) |
+| 断点观测、动态关注和实际加载版本 | [Recovery facts](docs/DASHBOARD-RECOVERY.md)、[Collector focus](docs/dashboard-collector-focus.md) |
+| 升级前角色版本矩阵与只读计划预览 | [Upgrade preflight](docs/UPGRADE-PREFLIGHT.md) |
 | 构建、验证、升级与回退 | [Releasing](docs/RELEASING.md)、[Support matrix](docs/SUPPORT-MATRIX.md) |
 
 ## 使用边界与验证状态

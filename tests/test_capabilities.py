@@ -6,6 +6,7 @@ from contextlib import redirect_stdout
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from controller import __version__
 from controller.capabilities import negotiate_worker, requirements_for_spec, worker_interface
 from controller.cli import main as controller_main
 from controller.domain import ExperimentSpec
@@ -45,7 +46,7 @@ class CapabilityContractTests(unittest.TestCase):
         self.assertTrue(envelope['ok'])
         self.assertEqual(envelope['data'], health_interface)
         self.assertEqual(health_interface['protocol'], {'name': 'ccs-worker', 'major': 1, 'minor': 0})
-        self.assertEqual(health_interface['software']['version'], '0.6.1')
+        self.assertEqual(health_interface['software']['version'], __version__)
         self.assertGreaterEqual(health_interface['capabilities']['run.submit'], 1)
         self.assertGreaterEqual(health_interface['capabilities']['evidence.runtime'], 2)
         self.assertGreaterEqual(health_interface['capabilities']['checkpoint.export'], 1)

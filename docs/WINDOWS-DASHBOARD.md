@@ -42,3 +42,15 @@ pwsh -NoProfile -File .\scripts\stop-dashboard.ps1
 采集失败、观测陈旧和连接中断不能直接判定训练已经失败。
 详细指标语义见 [任务结果](TASK-RESULTS.md)、[JSON 指标](DASHBOARD-JSON-TRAINING-METRICS.md)
 和 [配置面板](CONFIGURATION-PANEL.md)。
+
+## 0.6.2 候选：关注任务与版本
+
+已有新版面板时，`start-dashboard.ps1 -RunId <已登记 Run>` 可以通过鉴权同源的
+本地偏好入口切换优先采集，不必重启面板，更不会移动或重启训练。
+网页最近显式选择生效；不同标签页可以保留各自的详情，普通刷新不抢占焦点。
+GET 仍只读缓存，唯一 POST 仅改变本地采集偏好，没有远端变更能力。
+旧版面板需要一次仅本地的重启才能使用此入口；脚本不会静默重启它。
+
+页面显示进程实际导入版本及启动源码摘要，磁盘源码发生变化时提示重启本地面板。
+这个提示不要求重启 worker 或训练，也不表示已运行任务的冻结源码发生变化。
+详细规则见 [采集焦点](dashboard-collector-focus.md) 与 [断点观测](DASHBOARD-RECOVERY.md)。
