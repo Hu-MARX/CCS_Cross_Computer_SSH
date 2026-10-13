@@ -276,6 +276,18 @@ class CCSGateway:
             prepared = {**payload, 'worker_id': payload['target_worker_id'], 'worker_plan': worker_plan}
             classification = 'mutation'
             required = {'checkpoint.import': 1}
+        elif action == 'run.pause':
+            if (set(payload) - {'run_id', 'reason', 'worker_id', 'timeout_seconds'} or
+                    not {'run_id', 'reason'} <= set(payload) or not self._safe_id(payload.get('run_id')) or
+                    not isinstance(payload.get('reason'), str) or not payload['reason'].strip() or
+                    len(payload['reason']) > 500 or type(payload.get('timeout_seconds', 600)) is not int or
+                    not 1 <= payload.get('timeout_seconds', 600) <= 3600):
+                raise CCSRequestError('INVALID_REQUEST', 'run.pause requires run_id, reason and bounded timeout_seconds')
+            prepared = {'run_id': payload['run_id'], 'reason': payload['reason'].strip(),
+                        'timeout_seconds': payload.get('timeout_seconds', 600), 'worker_id': payload.get('worker_id')}
+            classification = 'mutation'
+            required = {'run.pause': 1}
+            self._route_run(prepared, required, allow_legacy=False)
         elif action == 'run.cancel':
             if (set(payload) - {'run_id', 'reason', 'worker_id'} or
                     not {'run_id', 'reason'} <= set(payload) or not self._safe_id(payload.get('run_id')) or
@@ -327,7 +339,7 @@ class CCSGateway:
             compatibility = prepared['remote'].compatibility(required)
             executable = compatibility.get('state') in {'compatible', 'legacy'}
         elif action in {
-                'run.events', 'run.logs', 'run.artifacts', 'run.cancel',
+                'run.events', 'run.logs', 'run.artifacts', 'run.cancel', 'run.pause',
                 'checkpoint.replicate', 'checkpoint.import', 'workspace.execute'}:
             compatibility = prepared['worker_plan']['compatibility']
             executable = compatibility.get('state') == 'compatible' or (
@@ -379,6 +391,11 @@ class CCSGateway:
                     if not dispatch:
                         raise self._operation_error(operation, 'OPERATION_ALREADY_RECORDED',
                                                     'query the recorded operation before repeating a mutation')
+                    if action == 'run.pause':
+                        # Keep the original Run available for receipt inspection even if dispatch loses its response.
+                        operation = self.repository.mark_operation(
+                            operation['operation_id'], 'started', run_id=prepared['run_id'],
+                        )
             except Exception as exc:
                 correlation = {field: getattr(exc, field, None) for field in
                                ('operation_id', 'worker_id', 'run_id', 'execution_state')}
@@ -393,6 +410,7 @@ class CCSGateway:
                                       'operation store unavailable; query original identity after recovery',
                                       execution_state='unknown',
                                       worker_id=prepared.get('worker_id', prepared.get('target_worker_id')),
+                                      run_id=prepared.get('run_id'),
                                       idempotency_key=payload.get('idempotency_key')) from exc
             try:
                 self.audit.record(normalized, classification, plan_sha256, 'started', operation=operation)
@@ -451,6 +469,11 @@ class CCSGateway:
                 else:
                     result = {'worker_id': prepared['worker_id'],
                               'artifacts': remote.artifacts(prepared['run_id'], path=prepared.get('path'))}
+            elif action == 'run.pause':
+                result = dict(self.worker_directory.remote_for(prepared['worker_id']).pause(
+                    prepared['run_id'], prepared['reason'], normalized['request_id'], prepared['timeout_seconds'],
+                ))
+                result['worker_id'] = prepared['worker_id']
             elif action == 'run.cancel':
                 result = self._snapshot_result(self.worker_directory.remote_for(prepared['worker_id']).cancel(
                     prepared['run_id'], prepared['reason'],
@@ -501,7 +524,7 @@ class CCSGateway:
             if operation is not None:
                 if action != 'run.submit':
                     state = getattr(exc, 'execution_state', None)
-                    if action not in {'run.cancel', 'workspace.execute'} or state not in {'not_sent', 'rejected'}:
+                    if action not in {'run.cancel', 'run.pause', 'workspace.execute'} or state not in {'not_sent', 'rejected'}:
                         state = 'unknown'
                     operation = dict(operation, state=state, execution_state=state,
                                      error_code=getattr(exc, 'code', type(exc).__name__))

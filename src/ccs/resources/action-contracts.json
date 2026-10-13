@@ -1035,6 +1035,89 @@
         "No automatic mutation retry; query/reconcile original operation or idempotency key after an unknown result."
       ]
     },
+    "run.pause": {
+      "classification": "mutation",
+      "summary": "Request a cooperative checkpoint-before-stop handshake for one opted-in Run.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "worker_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "pattern": "\\S"
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3600,
+            "default": 600
+          }
+        },
+        "required": [
+          "run_id",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "worker_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "status": {
+            "enum": ["QUEUED", "PREPARING", "RUNNING", "EVALUATING", "SUCCEEDED", "FAILED", "CANCELLED", "LOST"]
+          },
+          "pause": {
+            "type": "object",
+            "properties": {
+              "schema_version": {"const": 1},
+              "request_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "state": {
+                "enum": ["unsupported", "not_requested", "requested", "expired", "checkpoint_committed", "checkpoint_unverified", "paused", "invalid"]
+              }
+            },
+            "required": ["schema_version", "request_id", "state"],
+            "additionalProperties": true
+          }
+        },
+        "required": ["run_id", "worker_id", "status", "pause"],
+        "additionalProperties": true
+      },
+      "examples": [
+        {
+          "run_id": "run_example",
+          "worker_id": "worker-a",
+          "reason": "User requested maintenance pause",
+          "timeout_seconds": 600
+        }
+      ],
+      "constraints": [
+        "Requires run.pause=1 and task.pause opt-in to managed-checkpoint-v1. Legacy workers are rejected; this is not the legacy run.cancel exception.",
+        "Uses explicit worker_id, otherwise the controller Run record; an unregistered Run in a multi-worker pool requires worker_id. No alternate account or worker is substituted.",
+        "Mutation requires dry-run then exact confirm_plan_sha256 with unchanged request identity, actor and payload. request_id binds the durable worker pause receipt.",
+        "A confirmed requested receipt confirms delivery, not a saved checkpoint or stopped training. Read run.snapshot pause and checkpoint facts until the handshake completes.",
+        "Timeout or invalid checkpoint acknowledgement never authorizes forced cancellation. Unknown delivery requires operation.query and run.snapshot inspection; do not automatically resend or use a new request identity.",
+        "Resume is an independently approved new run.submit with validated checkpoint input and source_run_id lineage, not a restart of the paused Run."
+      ]
+    },
     "run.cancel": {
       "classification": "mutation",
       "summary": "Cancel one selected Run with an audit reason.",
@@ -2392,6 +2475,7 @@
               "run.logs",
               "run.artifacts",
               "run.submit",
+              "run.pause",
               "run.cancel",
               "checkpoint.replicate",
               "checkpoint.import",
@@ -3980,6 +4064,19 @@
                   },
                   "maxItems": 64
                 },
+                "pause": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {"const": 1},
+                    "protocol": {"const": "managed-checkpoint-v1"},
+                    "contract": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  },
+                  "required": ["schema_version", "protocol", "contract"],
+                  "additionalProperties": false
+                },
                 "checkpoint": {
                   "anyOf": [
                     {
@@ -3993,6 +4090,12 @@
               },
               "required": [
                 "kind"
+              ],
+              "allOf": [
+                {
+                  "if": {"required": ["pause"]},
+                  "then": {"properties": {"kind": {"const": "train"}}}
+                }
               ],
               "additionalProperties": false
             },
@@ -4189,6 +4292,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "pause": {
+          "anyOf": [
+            {"type": "object"},
+            {"type": "null"}
           ]
         },
         "runtime_configuration": {

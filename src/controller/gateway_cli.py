@@ -207,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
             action = request.get('action')
             payload = request.get('payload')
             payload = payload if isinstance(payload, dict) else {}
-            mutation = action in {'run.submit', 'run.cancel', 'checkpoint.replicate', 'checkpoint.import'}
+            mutation = action in {'run.submit', 'run.cancel', 'run.pause', 'checkpoint.replicate', 'checkpoint.import'}
             if action == 'workspace.execute':
                 nested = payload.get('request')
                 mutation = (nested.get('action') if isinstance(nested, dict) else None) not in {'inspect', 'diff', 'changes'}

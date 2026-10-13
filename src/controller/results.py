@@ -17,10 +17,17 @@ TASK_KINDS = {'train', 'test', 'analysis', 'build', 'simulate', 'benchmark', 'da
 
 def validate_task(task):
     from .domain import DomainError
-    if not isinstance(task, dict) or set(task) - {'kind', 'source_run_id', 'checkpoint', 'inputs'}:
+    if not isinstance(task, dict) or set(task) - {'kind', 'source_run_id', 'checkpoint', 'inputs', 'pause'}:
         raise DomainError('Invalid task metadata')
     if task.get('kind') not in TASK_KINDS:
         raise DomainError('task.kind must be one of: ' + ', '.join(sorted(TASK_KINDS)))
+    if 'pause' in task:
+        pause = task['pause']
+        if (task['kind'] != 'train' or not isinstance(pause, dict) or set(pause) != {'schema_version', 'protocol', 'contract'} or
+                type(pause.get('schema_version')) is not int or pause['schema_version'] != 1 or
+                pause.get('protocol') != 'managed-checkpoint-v1' or
+                not isinstance(pause.get('contract'), str) or not re.fullmatch('[a-f0-9]{64}', pause['contract'])):
+            raise DomainError('task.pause requires train kind, schema_version=1, protocol=managed-checkpoint-v1 and contract SHA-256')
     source = task.get('source_run_id')
     if source is not None and (not isinstance(source, str) or not SAFE_ID.fullmatch(source)):
         raise DomainError('Invalid task.source_run_id')
@@ -59,6 +66,7 @@ def descriptor(run_id, spec, worker=None, *, created_at=None, started_at=None,
             'gpu_index': resources.get('gpu_index'),
             'source_run_id': (task or {}).get('source_run_id'),
             'checkpoint': copy.deepcopy((task or {}).get('checkpoint')),
+            'pause': copy.deepcopy((task or {}).get('pause')),
             'inputs': copy.deepcopy((task or {}).get('inputs', [])),
             'artifact_pattern': spec.get('outputs', {}).get('checkpoint_glob') or spec.get('outputs', {}).get('artifact_glob'),
             'evidence': copy.deepcopy(spec.get('evidence'))}
@@ -140,6 +148,7 @@ def task_result(state):
             'configuration': copy.deepcopy(state.get('configuration') or {'state': 'not_recorded', 'parameters': [], 'sources': []}),
             'runtime_configuration': copy.deepcopy(latest.get('runtime_configuration')),
             'checkpoint': copy.deepcopy(latest.get('checkpoint')),
+            'pause': copy.deepcopy(latest.get('pause')),
             'errors': copy.deepcopy(state.get('errors', {})),
             'logs': copy.deepcopy(latest.get('logs', {})),
             'failure': ({'code': 'RUN_FAILED', 'message': 'Worker reported FAILED; inspect stderr/events for cause'}

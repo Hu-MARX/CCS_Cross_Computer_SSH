@@ -1,6 +1,6 @@
 # CCS 文档导航
 
-当前源码候选版本为 **0.6.2**。安装环境、Worker 部署、运行授权与验收范围应分别确认；本机代码测试通过不代表已经部署了远端能力。候选变更范围见 [0.6.2 记录](RELEASE-0.6.2.md)。
+当前源码候选版本为 **0.6.3**。安装环境、Worker 部署、运行授权与验收范围应分别确认；本机代码测试通过不代表已经部署了远端能力。候选变更范围见 [0.6.3 记录](RELEASE-0.6.3.md)。
 
 ## 第一次使用
 
@@ -20,6 +20,7 @@
 | 超时后查询操作账本与协调 uncertain submission | [操作指南第 7 节](OPERATION-GUIDE.md#7-处理-unknown先查账本再做只读协调)、[Agent 接入的错误与重试](AGENT-INTEGRATION.md#errors-retries-and-execution-evidence) |
 | 复制检查点、导入到指定 Worker、处理中断 | [检查点迁移与中断恢复](CHECKPOINT-REPLICATION.md) |
 | 把恢复输入绑定到新 Run、验证真正模型恢复 | [恢复输入门禁](TASK-CHECKPOINT-GATE.md)、[模型恢复适配契约](MODEL-RECOVERY-ADAPTERS.md) |
+| 在训练安全点保存、确认暂停、验证恢复推进 | [安全暂停握手](COOPERATIVE-PAUSE.md) |
 | 事务式远端工作区修改 | [受限远端工作区](REMOTE-WORKSPACE.md) |
 | 区分观察、产物绑定与执行证据 | [产物绑定](ARTIFACT-BINDING.md)、[证据状态](EVIDENCE-STATUS.md) |
 | Windows 本机只读看板 | [Windows 看板](WINDOWS-DASHBOARD.md)、[看板配置面板](CONFIGURATION-PANEL.md)、[训练指标 JSON](DASHBOARD-JSON-TRAINING-METRICS.md) |

@@ -35,6 +35,7 @@ class RemoteSnapshot:
     evidence_runtime: dict | None = None
     source_snapshot: dict | None = None
     runtime_configuration: dict | None = None
+    pause: dict | None = None
 
 
 class RemoteRunner(Protocol):
@@ -50,6 +51,7 @@ class RemoteRunner(Protocol):
                     max_bytes: int = 1024 * 1024) -> dict: ...
     def logs(self, run_id: str, stream: str = 'stdout', after_offset: int = 0) -> dict: ...
     def cancel(self, run_id: str, reason: str) -> RemoteSnapshot: ...
+    def pause(self, run_id: str, reason: str, request_id: str, timeout_seconds: int = 600) -> dict: ...
     def artifacts(self, run_id: str, path: str | None = None) -> list[dict]: ...
     def artifacts_page(self, run_id: str, path: str | None = None, *, cursor: str | None = None,
                        limit: int = 100, max_bytes: int = 1024 * 1024) -> dict: ...
@@ -173,7 +175,8 @@ class OpenSSHRunner:
         try:
             return RemoteSnapshot(run_id, RunStatus(data["status"]), data.get("exit_code"), data.get("updated_at"),
                                   data.get('observation'), data.get('progress'), data.get('evidence'), data.get('evidence_gate'),
-                                  data.get('evidence_runtime'), data.get('source_snapshot'), data.get('runtime_configuration'))
+                                  data.get('evidence_runtime'), data.get('source_snapshot'), data.get('runtime_configuration'),
+                                  data.get('pause'))
         except (KeyError, ValueError) as exc:
             raise RemoteRunnerError("INVALID_REMOTE_RESPONSE", "snapshot response has an invalid status", retryable=False) from exc
 
@@ -231,6 +234,31 @@ class OpenSSHRunner:
             return RemoteSnapshot(run_id, RunStatus(data["status"]), data.get("exit_code"), data.get("updated_at"))
         except (KeyError, TypeError, ValueError) as exc:
             raise RemoteRunnerError('INVALID_REMOTE_RESPONSE', 'cancel response has an invalid status',
+                                    retryable=False, execution_state='unknown') from exc
+
+    def pause(self, run_id: str, reason: str, request_id: str, timeout_seconds: int = 600) -> dict:
+        self._validate_id(run_id, 'run id')
+        self._validate_id(request_id, 'pause request id')
+        if not isinstance(reason, str) or not reason.strip() or len(reason) > 500:
+            raise ValueError('pause reason must contain 1-500 characters')
+        if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 3600:
+            raise ValueError('pause timeout_seconds must be an integer between 1 and 3600')
+        self.require_capabilities({'run.pause': 1})
+        data = self._json_command(['pause', run_id, '--reason', reason, '--request-id', request_id,
+                                   '--timeout-seconds', str(timeout_seconds), '--json'])
+        try:
+            if not isinstance(data, dict) or data.get('run_id') != run_id:
+                raise ValueError('pause run identity mismatch')
+            RunStatus(data['status'])
+            receipt = data.get('pause')
+            if (not isinstance(receipt, dict) or type(receipt.get('schema_version')) is not int or
+                    receipt['schema_version'] != 1 or receipt.get('request_id') != request_id or
+                    receipt.get('state') not in {'unsupported', 'not_requested', 'requested', 'expired',
+                                                 'checkpoint_committed', 'checkpoint_unverified', 'paused', 'invalid'}):
+                raise ValueError('pause request identity mismatch')
+            return data
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RemoteRunnerError('INVALID_REMOTE_RESPONSE', 'pause response has no matching request receipt',
                                     retryable=False, execution_state='unknown') from exc
 
     def logs(self, run_id: str, stream: str = "stdout", after_offset: int = 0) -> dict:
@@ -526,7 +554,7 @@ class OpenSSHRunner:
 
     @staticmethod
     def _mutation(command, stdin):
-        if command[0] in {'submit', 'cancel', 'checkpoint-import'}:
+        if command[0] in {'submit', 'cancel', 'pause', 'checkpoint-import'}:
             return True
         if command[0] == 'workspace':
             try:
@@ -584,6 +612,7 @@ class FakeRemoteRunner:
         return RemoteSnapshot(
             run_id, run["status"], run["exit_code"], utc_now(),
             observation=run.get('observation'),
+            pause=run.get('pause'),
         )
 
     def events(self, run_id: str, after_seq: int) -> list[RemoteEvent]:
@@ -609,6 +638,13 @@ class FakeRemoteRunner:
     def cancel(self, run_id: str, reason: str) -> RemoteSnapshot:
         self.advance(run_id, RunStatus.CANCELLED, payload={"reason": reason})
         return self.snapshot(run_id)
+
+    def pause(self, run_id: str, reason: str, request_id: str, timeout_seconds: int = 600) -> dict:
+        # This fixture records a request only: no training adapter saves a checkpoint here.
+        run = self.runs[run_id]
+        run['pause'] = {'schema_version': 1, 'request_id': request_id, 'state': 'requested',
+                        'reason': reason, 'timeout_seconds': timeout_seconds}
+        return {'run_id': run_id, 'status': run['status'].value, 'pause': dict(run['pause'])}
 
     def artifacts(self, run_id: str, path: str | None = None) -> list[dict]:
         items = self.runs[run_id]["artifacts"]

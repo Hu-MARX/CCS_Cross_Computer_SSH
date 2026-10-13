@@ -98,6 +98,12 @@ def _parser() -> argparse.ArgumentParser:
     cancel.add_argument("run_id")
     cancel.add_argument("--reason", required=True)
     cancel.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    pause = sub.add_parser('pause')
+    pause.add_argument('run_id')
+    pause.add_argument('--reason', required=True)
+    pause.add_argument('--request-id', required=True)
+    pause.add_argument('--timeout-seconds', type=int, default=600)
+    pause.add_argument('--json', action='store_true', help=argparse.SUPPRESS)
     recover = sub.add_parser("recover")
     recover.add_argument("run_id")
     recover.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
@@ -184,6 +190,8 @@ def main(argv: list[str] | None = None) -> int:
                 result = imports.show(args.import_id)
         elif args.command == "cancel":
             result = store.cancel(args.run_id, args.reason)
+        elif args.command == 'pause':
+            result = store.pause(args.run_id, args.reason, args.request_id, args.timeout_seconds)
         elif args.command == "recover":
             result = store.snapshot(args.run_id)
         elif args.command == "evaluate":
@@ -199,6 +207,8 @@ def main(argv: list[str] | None = None) -> int:
     except (TrainCtlError, ValueError, OSError, KeyError, RuntimeError, sqlite3.Error) as exc:
         if isinstance(exc, TrainCtlError):
             error = {"code": exc.code, "message": exc.message, "retryable": exc.retryable}
+            if exc.execution_state is not None:
+                error['execution_state'] = exc.execution_state
         else:
             error = {"code": "INVALID_REQUEST", "message": str(exc), "retryable": False}
         print(json.dumps(_response(error=error), ensure_ascii=False))

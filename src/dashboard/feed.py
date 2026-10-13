@@ -47,6 +47,30 @@ def atomic_json(path, value):
         temporary.unlink(missing_ok=True)
 
 
+def pause_projection(value):
+    """Bounded facts only; no request body, checkpoint path or action authority."""
+    if not isinstance(value, dict):
+        return None
+    states = {'unsupported', 'not_requested', 'requested', 'expired',
+              'checkpoint_committed', 'checkpoint_unverified', 'paused', 'invalid'}
+    state = value.get('state') if value.get('state') in states else 'invalid'
+    quiescent, safe = value.get('quiescent') is True, value.get('safe_to_resume') is True
+    if state == 'paused' and not (quiescent and safe):
+        state, safe = 'invalid', False
+    if state != 'paused':
+        safe = False
+    request = value.get('request') if isinstance(value.get('request'), dict) else {}
+    checkpoint = value.get('checkpoint') if isinstance(value.get('checkpoint'), dict) else {}
+    verification = value.get('verification') if isinstance(value.get('verification'), dict) else {}
+    text = lambda item: item[:128] if isinstance(item, str) else None
+    return {'state':state, 'quiescent':quiescent, 'safe_to_resume':safe,
+            'request_id':text(value.get('request_id')), 'requested_at':text(request.get('requested_at')),
+            'expires_at':text(request.get('expires_at')), 'checkpoint_id':text(checkpoint.get('id')),
+            'checkpoint_step':finite(checkpoint.get('global_step')),
+            'bytes_verified_at':text(verification.get('bytes_verified_at')),
+            'current_bytes_rehashed':verification.get('current_bytes_rehashed') is True}
+
+
 def observation(payload, at):
     progress = payload.get('progress') or {}
     metrics = progress.get('metrics') or {}
@@ -63,6 +87,7 @@ def observation(payload, at):
             'val_loss': finite(metrics.get('val/loss')), 'map': finite(metrics.get('val/mAP_50_95')),
             'progress_state': payload.get('progress_state'),
             'runtime_configuration': payload.get('runtime_configuration'),
+            'pause': pause_projection(payload.get('pause')),
             'memory_bytes': finite(execution.get('MemoryCurrent')),
             'execution_result': execution.get('Result'), 'exit_code': execution.get('ExecMainStatus'),
             'checkpoint': {'state': checkpoint.get('state'), 'updated_at': checkpoint.get('updated_at'),

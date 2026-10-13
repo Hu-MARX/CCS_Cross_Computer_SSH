@@ -155,6 +155,33 @@ $cancelPlan = Invoke-CcsRequest $cancel
 # Invoke-CcsRequest $cancel
 ```
 
+### 完整断点确认后暂停
+
+`run.pause` 与强制停止的 `run.cancel` 不同：只有提交时显式设置
+`task.pause = {schema_version: 1, protocol: 'managed-checkpoint-v1', contract: '<64位SHA-256>'}`
+的训练任务，且从机声明 `run.pause=1` 时才能使用。训练适配器需要遵循暂停协议，
+保存并提交完整恢复点后确认本次请求。旧任务不能靠后来增加元数据变成可安全暂停任务。
+
+```powershell
+$pause = New-CcsRequest 'run.pause' @{
+    worker_id = $Worker
+    run_id = $RunId
+    reason = '操作者要求维护暂停，先保存完整断点'
+    timeout_seconds = 600
+} $true 'maintenance-pause-001'
+$pausePlan = Invoke-CcsRequest $pause
+# 审阅计划并确认已获授权后，保持请求身份与 payload 不变：
+# $pause.dry_run = $false
+# $pause.confirm_plan_sha256 = $pausePlan.data.plan_sha256
+# Invoke-CcsRequest $pause
+```
+
+返回 `confirmed` 与 `pause.state=requested` 只表示请求已送达，并不代表训练已停止。
+继续使用 `run.snapshot` 读取原 Run 的 `pause`、完整断点与进程停止事实；没有完整保存确认，
+不得关机。协议超时或确认无效不自动退化为强制取消。响应丢失时查询 `operation.query`
+及原 Run 中匹配 `request_id` 的暂停回执，不重发，也不更换账号、从机或请求身份。
+恢复仍需独立批准的新 `run.submit`，带已验证的 `task.checkpoint` 与 `task.source_run_id`。
+
 ## 5. 按游标读取日志、事件和产物
 
 ```powershell

@@ -64,6 +64,23 @@ const date = v => v && !Number.isNaN(Date.parse(v)) ? new Date(v).toLocaleString
 const gb = v => nums(v) ? (v/1024**3).toFixed(1)+" GiB" : "—";
 const text = (id,v) => { $(id).textContent = v; };
 function badge(id,value,kind){text(id,value);$(id).className=(id==="state"?"state ":"badge ")+kind;}
+function renderPause(d){
+  const latest=d.latest||{}, pause=latest.pause||{}, fresh=d.connection==='fresh';
+  const declared=((d.task||{}).pause)||(((d.result||{}).task||{}).pause);
+  let state=pause.state||(declared?'not_requested':'unsupported');
+  const confirmed=state==='paused'&&latest.status==='CANCELLED'&&pause.quiescent===true&&pause.safe_to_resume===true;
+  if(state==='paused'&&!confirmed)state='invalid';
+  const labels={unsupported:'未声明支持安全暂停',not_requested:'已支持，未请求',requested:'等待训练器保存',
+    expired:'请求已超时',checkpoint_committed:'已保存，等待完整退出确认',checkpoint_unverified:'断点待验证',
+    paused:'已安全暂停',invalid:'暂停证据无效'};
+  badge('pause-state',!fresh&&pause.state?'上次暂停记录，观测已过期':labels[state]||'暂停能力未知',
+    !fresh?'neutral':confirmed?'good':state==='invalid'?'warning':'neutral');
+  text('pause-step',fmt(pause.checkpoint_step));
+  text('pause-note',state==='expired'?'超时不强杀训练，不自动续训；已提交的断点仍保留。':
+    state==='unsupported'?'当前任务未接入保存握手；本页不会把取消当安全暂停。':
+    state==='paused'?'训练器保存确认和完整退出证据已记录；恢复仍需明确提交新 Run 并校验输入。':
+    '请求送达、断点保存和完整退出分别确认；本页不触发暂停或续训。');
+}
 function exportSnapshot(d){
   const result=JSON.parse(JSON.stringify(d.result));
   result.exported_at=new Date().toISOString();
@@ -333,6 +350,7 @@ function render(d){
   text("recovery-replay",nums(recovery.replay_steps)?"截至已观测进展需重算 "+fmt(recovery.replay_steps)+" 步（非实际断电丢失上界）":"未知 · 无可比较的同口径记录");
   const recoveryLabels={reported_only:"训练器报告，尚未验证恢复；恢复前需校验文件",verified:"worker 报告可恢复（非实际恢复测试）",not_resumable:"不可直接恢复，需选择安全点",unknown:"恢复能力未知"};
   text("recovery-note",(recoveryLabels[recovery.resume_capability]||"恢复能力未知")+(recovery.checkpoint_source?" · 断点来源："+recovery.checkpoint_source:"")+"。日志步数不等于完整断点；本页不触发续训。");
+  renderPause(d);
   const active=(d.alerts||[]).filter(a=>!a.resolved_at);
   text("evidence",evidenceStatus(ev,active));
   text("rotations",fmt(ev.rotations_completed)+(ev.rotations_completed===0?" · 尚未完成全轮":""));
@@ -382,7 +400,7 @@ async function refresh(){
     }
     if(version===requestVersion){data=value;render(data);}
   }}
-  catch(error){if(version!==requestVersion)return;badge("connection","本机看板连接异常","warning");$("notice").className="notice warning";text("notice",String(error.message)+" 保留上次画面，不能据此判断训练中断。");text("progress-state","待确认");if(data){data.connection="stale";badge("state","上次状态："+(labels[(data.latest||{}).status]||"未知"),"neutral");text("gpu-time","资源采样 "+date((data.monitor||{}).observed_at)+" · 连接中断，可能过期");}}
+  catch(error){if(version!==requestVersion)return;badge("connection","本机看板连接异常","warning");$("notice").className="notice warning";text("notice",String(error.message)+" 保留上次画面，不能据此判断训练中断。");text("progress-state","待确认");if(data){data.connection="stale";badge("state","上次状态："+(labels[(data.latest||{}).status]||"未知"),"neutral");text("gpu-time","资源采样 "+date((data.monitor||{}).observed_at)+" · 连接中断，可能过期");renderPause(data);}}
   finally{busy=false;$("refresh").disabled=false;if(version!==requestVersion)refresh();}
 }
 $("task-select").addEventListener("change",()=>{text("notice","正在切换任务；下方仍为上一个任务的记录。");selectRun($("task-select").value);});

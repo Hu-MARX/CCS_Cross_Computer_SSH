@@ -22,6 +22,39 @@ function page(savedSelection=null,search=''){
 function state(){return {run_id:'run_test',name:'CVFDETR',epochs:50,connection:'fresh',catching_up:false,errors:{},points:[],alerts:[],
   sample_age_seconds:3,interval_seconds:30,latest:{status:'RUNNING',epoch:0,step:12,updates:10,phase:'train',progress_state:'advancing',loss:null},monitor:{health:{gpu:[]}}};}
 
+test('pause observation separates request delivery checkpoint save and confirmed exit',()=>{
+  const p=page(),d=state();p.render(d);
+  assert.match(p.elements.get('pause-state').textContent,/未声明支持/);
+  d.latest.pause={state:'requested',checkpoint_step:null};p.render(d);
+  assert.match(p.elements.get('pause-state').textContent,/等待训练器保存/);
+  d.latest.pause={state:'checkpoint_committed',checkpoint_step:100,quiescent:false,safe_to_resume:false};p.render(d);
+  assert.match(p.elements.get('pause-state').textContent,/已保存.*完整退出/);
+  assert.equal(p.elements.get('pause-step').textContent,'100');
+  assert.doesNotMatch(p.elements.get('pause-state').textContent,/已安全暂停/);
+  d.latest.pause={state:'expired'};p.render(d);
+  assert.match(p.elements.get('pause-note').textContent,/不强杀.*不自动续训/);
+});
+
+test('only fresh cancelled runs with independent quiescence render a verified pause',()=>{
+  const p=page(),d=state();d.latest.pause={state:'paused',quiescent:true,safe_to_resume:true,checkpoint_step:100};p.render(d);
+  assert.doesNotMatch(p.elements.get('pause-state').textContent,/已安全暂停/);
+  d.latest.status='CANCELLED';p.render(d);
+  assert.equal(p.elements.get('pause-state').textContent,'已安全暂停');
+  assert.equal(p.elements.get('pause-state').className,'badge good');
+  d.connection='stale';p.render(d);
+  assert.match(p.elements.get('pause-state').textContent,/上次暂停记录.*过期/);
+  assert.equal(p.elements.get('pause-state').className,'badge neutral');
+  d.connection='fresh';d.latest.pause.quiescent=false;p.render(d);
+  assert.match(p.elements.get('pause-state').textContent,/证据无效/);
+});
+
+test('local refresh failure removes a cached safe-pause success badge',async()=>{
+  const p=page(),d=state();d.latest.status='CANCELLED';d.latest.pause={state:'paused',quiescent:true,safe_to_resume:true};p.render(d);
+  await p.run("busy=false;fetch=async()=>{throw new Error('offline')};refresh()");
+  assert.match(p.elements.get('pause-state').textContent,/上次暂停记录.*过期/);
+  assert.equal(p.elements.get('pause-state').className,'badge neutral');
+});
+
 test('dashboard runtime drift is distinct from worker version and another tab focus',()=>{
   const p=page(),d=state();d.dashboard_runtime={loaded_version:'0.6.1',restart_required:true};
   d.collector_focus={run_id:'run_other',worker:'worker-two'};p.render(d);
