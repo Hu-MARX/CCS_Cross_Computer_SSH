@@ -20,11 +20,12 @@ def main():
             ('ccs-result.schema.json', result_schema()),
             ('experiment-spec.schema.json', experiment_spec_schema())):
         target = ROOT / 'schemas' / name
-        same = target.exists() and json.loads(target.read_text(encoding='utf-8')) == schema
+        rendered = json.dumps(schema, ensure_ascii=False, indent=2) + '\n'
+        same = target.exists() and target.read_bytes() == rendered.encode('utf-8')
         if not same:
             mismatch.append(name)
             if not args.check:
-                target.write_text(json.dumps(schema, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+                target.write_text(rendered, encoding='utf-8', newline='\n')
     print(json.dumps({'status': 'drift' if args.check and mismatch else 'synchronized',
                       'changed': mismatch}, ensure_ascii=True))
     return int(args.check and bool(mismatch))

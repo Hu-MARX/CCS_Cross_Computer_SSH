@@ -2,6 +2,7 @@
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -9,6 +10,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
+from threading import Event, Thread
 
 from controller.domain import ExperimentSpec, RunStatus
 from trainctl.cli import main
@@ -26,12 +28,24 @@ class CooperativePauseWorkerTests(unittest.TestCase):
         self.gpu = patch.object(RunStore, '_gpu_snapshot', return_value=[])
         self.gpu.start()
         self.started = []
+        self.supervisors = []
+        self.supervisor_runs = {}
 
     def tearDown(self):
-        for run_id in self.started:
-            self.store.cancel(run_id, 'local test cleanup')
-        self.gpu.stop()
-        self.folder.cleanup()
+        try:
+            for run_id in self.started:
+                if not RunStatus(self.store.snapshot(run_id)['status']).terminal:
+                    self.store.cancel(run_id, 'local test cleanup')
+        finally:
+            try:
+                # A terminal status is published before the supervisor exits.
+                # Join the actual process, not a fixed sleep or ignored cleanup
+                # error, before removing runner.log on Windows.
+                for process in self.supervisors:
+                    process.wait(timeout=20)
+            finally:
+                self.gpu.stop()
+            self.folder.cleanup()
 
     def submit(self, *, pause=False, code='pass', evaluation=None, start=False):
         task = {'kind': 'train'}
@@ -46,8 +60,17 @@ class CooperativePauseWorkerTests(unittest.TestCase):
             'evaluation': {'argv': [sys.executable, '-c', evaluation]} if evaluation else {},
         })
         if start:
-            value = self.store.submit(spec, str(len(self.started)))
+            real_popen = subprocess.Popen
+            before = len(self.supervisors)
+
+            def launch(*args, **kwargs):
+                process = real_popen(*args, **kwargs)
+                self.supervisors.append(process)
+                return process
+            with patch('trainctl.run_store.subprocess.Popen', side_effect=launch):
+                value = self.store.submit(spec, str(len(self.started)))
             self.started.append(value['run_id'])
+            self.supervisor_runs[value['run_id']] = self.supervisors[before:]
         else:
             with patch.object(self.store, '_start_runner', return_value=0):
                 value = self.store.submit(spec, str(len(list(self.store.runs.iterdir()))))
@@ -57,9 +80,41 @@ class CooperativePauseWorkerTests(unittest.TestCase):
         for _ in range(150):
             result = self.store.snapshot(run_id)
             if RunStatus(result['status']).terminal:
-                return result
+                for process in self.supervisor_runs.get(run_id, []):
+                    process.wait(timeout=20)
+                # The public terminal record remains authoritative, but fixture
+                # consumers now observe it after all supervisor handles close.
+                return self.store.snapshot(run_id)
             time.sleep(0.1)
         self.fail('local supervisor did not finish')
+
+    def test_snapshot_serializes_with_status_publication(self):
+        from trainctl.locking import file_lock
+        run_id = self.submit()
+        run_dir = self.store.runs / run_id
+        attempted, completed = Event(), Event()
+        outcome = []
+        def read_snapshot():
+            attempted.set()
+            try:
+                outcome.append(self.store.snapshot(run_id))
+            finally:
+                completed.set()
+        reader = Thread(target=read_snapshot)
+        try:
+            with file_lock(run_dir / 'status.lock'):
+                reader.start()
+                self.assertTrue(attempted.wait(2))
+                self.assertFalse(completed.wait(0.2), 'snapshot bypassed a pending status publication')
+                status = self.store._read_json(run_dir / 'status.json', {})
+                status['status'] = 'RUNNING'
+                self.store._atomic_json(run_dir / 'status.json', status)
+        finally:
+            # The context releases the exact writer lock before joining.
+            if reader.ident is not None:
+                reader.join(timeout=2)
+        self.assertFalse(reader.is_alive())
+        self.assertEqual(outcome[0]['status'], 'RUNNING')
 
     def test_undeclared_pause_is_rejected_without_request_or_cancel(self):
         run_id = self.submit()
@@ -142,7 +197,10 @@ class CooperativePauseWorkerTests(unittest.TestCase):
 
     def test_finished_training_rejects_a_new_pause_identity(self):
         run_id = self.submit(pause=True, start=True)
-        self.assertEqual(self.wait(run_id)['status'], 'SUCCEEDED')
+        result = self.wait(run_id)
+        self.assertEqual(result['status'], 'SUCCEEDED', (
+            result, self.store.logs(run_id, 'stderr')['text'],
+            (self.store.runs / run_id / 'runner.log').read_text(encoding='utf-8')))
         with self.assertRaises(TrainCtlError) as raised:
             self.store.pause(run_id, 'too late', 'late-pause')
         self.assertEqual(raised.exception.code, 'PAUSE_NOT_ACTIVE')

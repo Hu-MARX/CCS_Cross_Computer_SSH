@@ -201,7 +201,12 @@ class RunStore:
 
     def snapshot(self, run_id: str) -> dict[str, Any]:
         run_dir = self._require_run(run_id)
-        status = self._read_json(run_dir / "status.json", {})
+        # Writers already hold this lock around atomic publication. Windows
+        # sharing rules require readers not to open the old file while that
+        # replacement is in flight; synchronize this read rather than hiding a
+        # permission error or fabricating a successful snapshot.
+        with file_lock(run_dir / 'status.lock'):
+            status = self._read_json(run_dir / "status.json", {})
         status["health"] = self._gpu_snapshot()
         status['observation'] = self._read_json(run_dir / 'observation.json', None)
         binding = self._read_json(run_dir / 'manifest.json', {}).get('evidence')
