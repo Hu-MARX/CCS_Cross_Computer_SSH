@@ -8,7 +8,7 @@ import threading
 import time
 from concurrent.futures import Future, wait, FIRST_COMPLETED
 from contextlib import nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from .capabilities import negotiate_worker
@@ -207,8 +207,12 @@ class WorkerDirectory:
     def submission_plan(self, worker_id: str, required: dict[str, int]) -> dict[str, Any]:
         return self.operation_plan(worker_id, required, allow_legacy=False)
 
-    def operation_plan(self, worker_id: str, required: dict[str, int], *, allow_legacy: bool) -> dict[str, Any]:
+    def operation_plan(self, worker_id: str, required: dict[str, int], *, allow_legacy: bool,
+                       workspace: bool = False) -> dict[str, Any]:
         binding = self._binding(worker_id)
+        if workspace:
+            # Negotiate the same identity/root/executable that workspace dispatch uses.
+            binding = replace(binding, remote=self.remote_for(worker_id, workspace=True))
         report = self._observe(binding, required)
         if report['state'] == 'unreachable':
             error = report['error']

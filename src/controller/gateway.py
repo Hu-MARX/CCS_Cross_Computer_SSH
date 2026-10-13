@@ -292,7 +292,7 @@ class CCSGateway:
             required = {'workspace.control': 1}
             worker_id = self._selected_worker(payload.get('worker_id'))
             worker_plan = self.worker_directory.operation_plan(
-                worker_id, required, allow_legacy=classification == 'read',
+                worker_id, required, allow_legacy=classification == 'read', workspace=True,
             )
             prepared = {'request': workspace_request, 'worker_id': worker_id, 'worker_plan': worker_plan}
         elif action == 'fleet.status':
