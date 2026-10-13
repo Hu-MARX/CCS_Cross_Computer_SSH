@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.2 — recovery observation and safe maintenance (candidate)
+
+- Negotiate workspace capabilities against the actual workspace endpoint.
+- Separate logged progress, trainer-reported checkpoint commitment, native
+  replay capability and observed replay gap; preserve native metric authority.
+- Add a declared ordinary JSON progress-report adapter and cadence-aware
+  collection freshness without loading model state or automatically resuming.
+- Follow authenticated local collector preferences with fixed native/log
+  collectors; show startup software identity and source-change restart warnings.
+- Add offline upgrade role matrices and preview-only side-by-side checklists.
+- Count parent tests separately from subtest and fixture errors in verification
+  reports; keep raw failures, errors and required-skip gates unchanged.
+- Keep remote mutations on the existing exact-plan JSON Interface; no new
+  remote deployment, cancellation or automatic training-retry surface.
+
 ## 0.6.1 — public repository preparation
 
 - Add Chinese installation/operation guides, a documentation index and explicit

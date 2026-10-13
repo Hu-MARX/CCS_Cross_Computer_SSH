@@ -1,7 +1,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const token = location.hash.slice(1);
-let data = null, busy = false, selectedRun = null, requestVersion = 0;
+let data = null, busy = false, selectedRun = null, requestVersion = 0, focusPending = false, focusExpected = null;
 try { const saved=sessionStorage.getItem('ccs.selectedRun'); if(/^run_[a-zA-Z0-9_-]+$/.test(saved||''))selectedRun=saved; } catch (_) {}
 let followLive=!selectedRun;
 try { if(sessionStorage.getItem('ccs.followLive')==='true')followLive=true; } catch (_) {}
@@ -29,19 +29,27 @@ function preferredActive(value){
   return successor||active.find(item=>current&&item.worker===current.worker)||active[0];
 }
 function followRunning(){
-  followLive=true;requestVersion++;
+  followLive=true;focusPending=true;focusExpected=null;requestVersion++;
   try { sessionStorage.setItem('ccs.followLive','true'); } catch (_) {}
   refresh();
 }
 function selectRun(run){
-  selectedRun=run;followLive=false;requestVersion++;
+  selectedRun=run;followLive=false;focusPending=true;focusExpected=null;requestVersion++;
   try { sessionStorage.setItem('ccs.selectedRun',run);sessionStorage.setItem('ccs.followLive','false'); } catch (_) {}
   refresh();
 }
 function acceptSelection(value){
   if(selectedRun&&!followLive)return true;
   const active=preferredActive(value);
+  const previous=selectedRun;
   selectedRun=active?active.run_id:value.run_id;
+  // Automatic continuation may keep its own focus, but never steal focus
+  // from an explicit selection in another tab. The server also checks this
+  // expected owner, covering a selection race between GET and POST.
+  const focus=value.collector_focus;
+  if(!focusPending&&selectedRun!==previous&&(!focus||focus.run_id===previous||(!previous&&focus.run_id===value.run_id))){
+    focusPending=true;focusExpected=focus?focus.run_id:null;
+  }
   try { sessionStorage.setItem('ccs.selectedRun',selectedRun);sessionStorage.setItem('ccs.followLive',String(followLive)); } catch (_) {}
   if(selectedRun!==value.run_id){requestVersion++;return false;}
   return true;
@@ -223,6 +231,12 @@ function render(d){
   renderConfiguration(d);
   renderActiveRuns(d);
   renderOverview(d);
+  const dashboard=d.dashboard_runtime||{},focus=d.collector_focus||{};
+  text("dashboard-version",dashboard.loaded_version?`v${dashboard.loaded_version} · 启动 ${date(dashboard.started_at)} · 源码 ${(dashboard.loaded_source_sha256||'未知').slice(0,12)}`:"运行版本尚未上报");
+  text("dashboard-runtime-note",dashboard.restart_required?"本地源码已变化：当前进程仍使用启动时版本，需要重启本地观测台；无需重启训练。":
+    dashboard.source_state==='unavailable'?"源码版本检查暂不可用；不能确认本地文件与运行进程一致。":"运行进程版本独立于从机版本；此处不执行自动重启。");
+  $("dashboard-runtime-note").className=dashboard.restart_required?'notice warning':'muted';
+  text("collector-focus",focus.run_id?`优先采集：${focus.worker||'未记录从机'} · ${focus.run_id}${focus.run_id!==d.run_id?'（另一标签页选择；当前详情仍保留你的选择）':''}。最近显式选择生效，普通刷新不抢占。`:"等待采集焦点；任务选择只改变本地读取优先级，不修改远端任务。");
   const compatibility=d.worker_compatibility||{}, protocol=compatibility.protocol||{}, software=compatibility.software||{};
   const compatibilityText={compatible:`兼容 · 协议 ${protocol.major??"—"}.${protocol.minor??"—"} · v${software.version||"未知"}`,
     legacy:"旧版从机 · 能力未声明",incompatible:"接口不兼容 · 禁止新操作",unavailable:"协商暂不可用",not_collected:"等待协商"};
@@ -245,7 +259,7 @@ function render(d){
   text("task-source",task.source_run_id||"无关联来源记录");
   text("task-checkpoint",task.checkpoint?`${task.checkpoint.path} · SHA256 ${task.checkpoint.sha256}`:"未声明测试输入权重（不等于没有恢复点）");
   text("task-inputs",(task.inputs||[]).map(x=>`${x.path} · SHA256 ${x.sha256}`).join("\n")||"未声明任务输入清单；已有证据绑定保持独立");
-  text("catalog-note",d.catalog_error?"本地任务目录读取异常："+d.catalog_error:"所有活跃任务每轮采集，历史任务轮询补齐；这里只列出本机登记的近期任务。");
+  text("catalog-note",d.catalog_error?"本地任务目录读取异常："+d.catalog_error:"关注任务单独采集；其他活跃任务优先、历史任务轮询补齐。只列出本机登记的近期任务，慢查询时以各自观测时间为准。");
   $("metric-values").replaceChildren();
   const metrics=(d.result||{}).metrics||Object.fromEntries(Object.entries((d.latest||{}).metrics||{}).map(([key,value])=>[key,{value}]));
   for(const [key,item] of Object.entries(metrics)){const row=document.createElement("tr");for(const value of [key,fmt(item.value,6),phases[item.phase]||item.phase||"—",date(item.sample_at)]){const cell=document.createElement("td");cell.textContent=value;row.append(cell);}$("metric-values").append(row);}
@@ -312,6 +326,13 @@ function render(d){
   badge("checkpoint-state",ck[c.state]||"尚无记录",c.state==="failed"?"danger":c.state==="committed"?"good":"neutral");
   text("checkpoint-step",fmt(c.step));text("checkpoint-time",date(c.created_at));
   text("checkpoint-safe",c.state==="reported_committed"?"已读取恢复点收据；恢复前需校验文件":c.safe_to_resume===true?"最近点可重放恢复":c.safe_to_resume===false?"不可直接恢复，需回退安全点":"尚未报告");
+  const recovery=d.recovery||{};
+  text("recovery-log-step",fmt(recovery.logged_step));
+  text("recovery-progress-step",fmt(recovery.progress_step));
+  text("recovery-checkpoint-step",fmt(recovery.checkpoint_step));
+  text("recovery-replay",nums(recovery.replay_steps)?"截至已观测进展需重算 "+fmt(recovery.replay_steps)+" 步（非实际断电丢失上界）":"未知 · 无可比较的同口径记录");
+  const recoveryLabels={reported_only:"训练器报告，尚未验证恢复；恢复前需校验文件",verified:"worker 报告可恢复（非实际恢复测试）",not_resumable:"不可直接恢复，需选择安全点",unknown:"恢复能力未知"};
+  text("recovery-note",(recoveryLabels[recovery.resume_capability]||"恢复能力未知")+(recovery.checkpoint_source?" · 断点来源："+recovery.checkpoint_source:"")+"。日志步数不等于完整断点；本页不触发续训。");
   const active=(d.alerts||[]).filter(a=>!a.resolved_at);
   text("evidence",evidenceStatus(ev,active));
   text("rotations",fmt(ev.rotations_completed)+(ev.rotations_completed===0?" · 尚未完成全轮":""));
@@ -349,7 +370,18 @@ function chart(){
 async function refresh(){
   if(busy)return;busy=true;$("refresh").disabled=true;
   const version=requestVersion;
-  try{if(!token)throw new Error("缺少本机访问令牌，请从启动脚本提供的私有链接打开。");const response=await fetch("/api/state"+(selectedRun?"?run_id="+encodeURIComponent(selectedRun):""),{headers:{Authorization:"Bearer "+token},cache:"no-store",signal:AbortSignal.timeout(8000)});if(!response.ok)throw new Error("看板访问失败：HTTP "+response.status);const value=await response.json();if(version===requestVersion&&acceptSelection(value)){data=value;render(data);}}
+  try{if(!token)throw new Error("缺少本机访问令牌，请从启动脚本提供的私有链接打开。");const response=await fetch("/api/state"+(selectedRun?"?run_id="+encodeURIComponent(selectedRun):""),{headers:{Authorization:"Bearer "+token},cache:"no-store",signal:AbortSignal.timeout(8000)});if(!response.ok)throw new Error("看板访问失败：HTTP "+response.status);const value=await response.json();if(version===requestVersion&&acceptSelection(value)){
+    if(focusPending&&selectedRun){
+      const focusedRun=selectedRun;
+      const preferenceBody={run_id:focusedRun};if(focusExpected)preferenceBody.expected_run_id=focusExpected;
+      const preference=await fetch('/api/focus',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(preferenceBody),cache:'no-store',signal:AbortSignal.timeout(8000)});
+      if(!preference.ok)throw new Error('采集焦点切换失败：HTTP '+preference.status);
+      const focus=await preference.json();
+      if(version!==requestVersion)return;
+      focusPending=false;value.collector_focus=focus;
+    }
+    if(version===requestVersion){data=value;render(data);}
+  }}
   catch(error){if(version!==requestVersion)return;badge("connection","本机看板连接异常","warning");$("notice").className="notice warning";text("notice",String(error.message)+" 保留上次画面，不能据此判断训练中断。");text("progress-state","待确认");if(data){data.connection="stale";badge("state","上次状态："+(labels[(data.latest||{}).status]||"未知"),"neutral");text("gpu-time","资源采样 "+date((data.monitor||{}).observed_at)+" · 连接中断，可能过期");}}
   finally{busy=false;$("refresh").disabled=false;if(version!==requestVersion)refresh();}
 }

@@ -14,7 +14,15 @@ from controller.results import TERMINAL, age
 
 class SharedRemote:
     def __init__(self, remote):
-        self.remote, self.memo = remote, {}
+        self.remote, self.local = remote, threading.local()
+
+    @property
+    def memo(self):
+        # Catalog and focused collection have independent tick caches. A slow
+        # history query must neither hold nor overwrite the focused tick.
+        if not hasattr(self.local, 'memo'):
+            self.local.memo = {}
+        return self.local.memo
 
     def query(self, key):
         if key not in self.memo:
@@ -50,6 +58,10 @@ class Catalog:
         self.feeds, self.descriptors, self.feed_remotes = {}, {}, {}
         self.bridge_factory, self.bridges = bridge_factory, {}
         self.lock = threading.RLock()
+        self.poll_locks, self.bridge_locks = {}, {}
+        self.focused_run, self.focus_changed_at = self.primary, now()
+        self.focus_collectors = False
+        self.focus_wake = (threading.Event(), threading.Event())
         self.turn, self.catalog_error = 0, None
         self.processes = {'state': 'not_collected', 'items': []}
         self.workflows = {'state': 'not_collected', 'studies': []}
@@ -74,10 +86,76 @@ class Catalog:
             name=item['name'], epochs=item.get('epochs'), task=item, interval=self.interval)
         self.descriptors[run_id] = copy.deepcopy(item)
         self.feed_remotes[run_id] = remote
+        self.poll_locks[run_id] = threading.Lock()
+        self.bridge_locks[run_id] = threading.Lock()
         if self.bridge_factory is not None:
             bridge = self.bridge_factory(copy.deepcopy(item))
             self.bridges[run_id] = bridge
             self.feeds[run_id].supplement = bridge.supplement
+
+    def enable_focus_collectors(self):
+        """Server starts exactly two dedicated loops, never one per selection."""
+        with self.lock:
+            self.focus_collectors = True
+
+    def set_focus(self, run_id, *, expected_run_id=None):
+        """Change a local read preference; never select an execution worker.
+
+        Last explicit selection wins across tabs. GET views never claim focus.
+        The registered descriptor is the sole source of the worker binding.
+        """
+        with self.lock:
+            if run_id not in self.feeds or not self.descriptors[run_id].get('worker'):
+                raise KeyError(run_id)
+            if expected_run_id is not None and self.focused_run != expected_run_id:
+                return self._focus_view()
+            if self.focused_run != run_id:
+                self.focused_run, self.focus_changed_at = run_id, now()
+                for wake in self.focus_wake:
+                    wake.set()
+            return self._focus_view()
+
+    def _focus_view(self):
+        return {'run_id': self.focused_run,
+                'worker': self.descriptors[self.focused_run].get('worker'),
+                'changed_at': self.focus_changed_at,
+                'policy': 'last_explicit_selection_wins',
+                'dedicated_collection': self.focus_collectors}
+
+    def _poll_bridge(self, run_id):
+        with self.lock:
+            bridge, lock = self.bridges.get(run_id), self.bridge_locks.get(run_id)
+        if bridge is not None and lock is not None and lock.acquire(blocking=False):
+            try:
+                bridge.poll_safe()
+            finally:
+                lock.release()
+
+    def poll_focused(self, *, logs=False):
+        with self.lock:
+            run_id = self.focused_run
+            feed = self.feeds[run_id]
+            poll_lock = self.poll_locks[run_id]
+            task = copy.deepcopy(self.descriptors[run_id])
+        if logs:
+            self._poll_bridge(run_id)
+        elif poll_lock.acquire(blocking=False):
+            try:
+                feed.remote.memo.clear()
+                self._poll_catalog_feed(feed, task=task, collect_bridge=False)
+            finally:
+                poll_lock.release()
+
+    def run_focused(self, stop, *, logs=False, before_poll=None):
+        wake = self.focus_wake[int(logs)]
+        while not stop.is_set():
+            wake.clear()
+            if before_poll is not None:
+                before_poll()
+            self.poll_focused(logs=logs)
+            # One fixed loop per source. Rapid selections only coalesce wakeups;
+            # an already-running read completes under its original Run binding.
+            wake.wait(self.interval)
 
     @staticmethod
     def _fleet_view(report):
@@ -242,15 +320,24 @@ class Catalog:
         try:
             entries = list(self.discover())[:20]
             with self.lock:
-                keep = {self.primary, *(x['run_id'] for x in entries)}
+                keep = {self.primary, self.focused_run, *(x['run_id'] for x in entries)}
                 for run_id in list(self.feeds):
                     if run_id not in keep:
+                        # Never recreate the cache writer while its old read is
+                        # still in flight after a rapid focus change.
+                        if self.poll_locks[run_id].locked() or self.bridge_locks[run_id].locked():
+                            continue
                         del self.feeds[run_id]
                         del self.descriptors[run_id]
                         del self.feed_remotes[run_id]
                         self.bridges.pop(run_id, None)
+                        self.poll_locks.pop(run_id, None)
+                        self.bridge_locks.pop(run_id, None)
                 for item in entries:
                     self._add(item)
+                used_remotes = {id(self.remote), *(id(remote) for remote in self.feed_remotes.values())}
+                self.shared_remotes = {key: shared for key, shared in self.shared_remotes.items()
+                                       if key in used_remotes}
                 self.catalog_error = None
         except Exception as exc:
             with self.lock:
@@ -260,8 +347,12 @@ class Catalog:
             # Keep every active experiment in the bounded polling window, then
             # spend remaining capacity on rotating terminal history.
             selected = [self.feeds[self.primary]]
+            if self.focus_collectors and self.primary == self.focused_run:
+                selected = []
             active, history = [], []
             for key in others:
+                if self.focus_collectors and key == self.focused_run:
+                    continue
                 feed_view = self.feeds[key].view()
                 latest = feed_view.get('latest') or {}
                 status = (latest.get('status') or
@@ -295,46 +386,68 @@ class Catalog:
             except Exception as exc:
                 self.processes = {'state': 'unavailable', 'items': [], 'error': str(exc)[:1000]}
         for feed in selected:
-            from controller.configuration import read_configuration
-            configuration = read_configuration(self.directory.parent / 'config-evidence', self.descriptors[feed.run_id])
-            with feed.lock:
-                feed.state['configuration'] = configuration
-            feed.poll()
-            # The bounded collector, never an HTTP handler, reads log pages.
-            bridge = self.bridges.get(feed.run_id)
-            if bridge is not None and not getattr(bridge, 'background_polling', False):
-                bridge.poll_safe()
-            # Inventory is collected once after a confirmed terminal observation.
-            # Never load model files or traverse training/test datasets.
-            view = feed.view()
-            previous = view.get('artifacts', {})
-            if (view['connection'] == 'fresh' and (view.get('latest') or {}).get('status') in TERMINAL
-                    and previous.get('state') not in ('collected', 'truncated', 'requires_explicit_collection')
-                    and (age(previous.get('attempted_at')) is None or age(previous['attempted_at']) >= 300)):
-                try:
-                    pattern = self.descriptors[feed.run_id].get('artifact_pattern')
-                    parts = PurePosixPath(str(pattern)).parts
-                    # Only the declared output directory's direct files, no recursive search.
-                    if (not pattern or PurePosixPath(pattern).is_absolute() or '..' in parts or
-                            any(any(c in part for c in '*?[') for part in parts[:-1]) or '**' in pattern):
-                        with feed.lock:
-                            feed.state['artifacts'] = {'state': 'requires_explicit_collection', 'items': []}
-                            atomic_json(feed.cache, feed.state)
-                        continue
-                    rows = self.feed_remotes[feed.run_id].artifacts(feed.run_id)
-                    if not isinstance(rows, list):
-                        raise ValueError('Invalid artifact inventory')
-                    inventory = {'state': 'truncated' if len(rows) > 200 else 'collected',
-                        'collected_at': now(), 'items': [{k: row.get(k) for k in ('path', 'size', 'sha256')}
-                                                       for row in rows[:200]]}
-                except Exception as exc:
-                    inventory = {'state': 'unavailable', 'items': [], 'attempted_at': now(), 'error': str(exc)[:1000]}
-                with feed.lock:
-                    feed.state['artifacts'] = inventory
-                    try:
+            # A selection may change while discovery/history is in progress.
+            # The fixed focused loop, not this serial catalog loop, owns it.
+            with self.lock:
+                if self.focus_collectors and feed.run_id == self.focused_run:
+                    continue
+                poll_lock = self.poll_locks.get(feed.run_id)
+            if poll_lock is None or not poll_lock.acquire(blocking=False):
+                continue
+            try:
+                self._poll_catalog_feed(feed)
+            finally:
+                poll_lock.release()
+
+    def _poll_catalog_feed(self, feed, *, task=None, collect_bridge=True):
+        from controller.configuration import read_configuration
+        with self.lock:
+            task = task or copy.deepcopy(self.descriptors.get(feed.run_id))
+            remote = self.feed_remotes.get(feed.run_id)
+        if task is None or remote is None:
+            return
+        configuration = read_configuration(self.directory.parent / 'config-evidence', task)
+        with feed.lock:
+            feed.state['configuration'] = configuration
+        feed.poll()
+        # The bounded collector, never an HTTP handler, reads log pages.
+        bridge = self.bridges.get(feed.run_id)
+        if collect_bridge and bridge is not None and not getattr(bridge, 'background_polling', False):
+            with self.lock:
+                focused = self.focus_collectors and feed.run_id == self.focused_run
+            if not focused:
+                self._poll_bridge(feed.run_id)
+        # Inventory is collected once after a confirmed terminal observation.
+        # Never load model files or traverse training/test datasets.
+        view = feed.view()
+        previous = view.get('artifacts', {})
+        if (view['connection'] == 'fresh' and (view.get('latest') or {}).get('status') in TERMINAL
+                and previous.get('state') not in ('collected', 'truncated', 'requires_explicit_collection')
+                and (age(previous.get('attempted_at')) is None or age(previous['attempted_at']) >= 300)):
+            try:
+                pattern = task.get('artifact_pattern')
+                parts = PurePosixPath(str(pattern)).parts
+                # Only the declared output directory's direct files, no recursive search.
+                if (not pattern or PurePosixPath(pattern).is_absolute() or '..' in parts or
+                        any(any(c in part for c in '*?[') for part in parts[:-1]) or '**' in pattern):
+                    with feed.lock:
+                        feed.state['artifacts'] = {'state': 'requires_explicit_collection', 'items': []}
                         atomic_json(feed.cache, feed.state)
-                    except OSError as exc:
-                        feed.state['errors']['cache'] = str(exc)
+                    return
+                rows = remote.artifacts(feed.run_id)
+                if not isinstance(rows, list):
+                    raise ValueError('Invalid artifact inventory')
+                inventory = {'state': 'truncated' if len(rows) > 200 else 'collected',
+                    'collected_at': now(), 'items': [{k: row.get(k) for k in ('path', 'size', 'sha256')}
+                                                   for row in rows[:200]]}
+            except Exception as exc:
+                inventory = {'state': 'unavailable', 'items': [], 'attempted_at': now(), 'error': str(exc)[:1000]}
+            with feed.lock:
+                feed.state['artifacts'] = inventory
+                try:
+                    atomic_json(feed.cache, feed.state)
+                except OSError as exc:
+                    feed.state['errors']['cache'] = str(exc)
 
     def view(self, run_id=None):
         with self.lock:
@@ -366,6 +479,14 @@ class Catalog:
             result['workflows'] = copy.deepcopy(self.workflows)
             result['fleet'] = copy.deepcopy(self.fleet)
             result['worker_compatibility'] = copy.deepcopy(self.compatibility)
+            # The scalar compatibility record comes from the startup remote,
+            # not necessarily this view's worker. Never mislabel it on switch.
+            if self.descriptors[run_id].get('worker') != self.descriptors[self.primary].get('worker'):
+                worker = next((item for item in self.fleet.get('workers', [])
+                               if item['worker_id'] == self.descriptors[run_id].get('worker')), None)
+                result['worker_compatibility'] = copy.deepcopy(
+                    worker.get('compatibility') if worker else None) or {'state': 'not_collected'}
+            result['collector_focus'] = self._focus_view()
             return result
 
     def run(self, stop):

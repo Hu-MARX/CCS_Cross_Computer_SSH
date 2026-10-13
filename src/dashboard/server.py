@@ -5,7 +5,9 @@ import json
 import re
 import secrets
 import os
+import hashlib
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
@@ -18,8 +20,77 @@ from controller.repository import RunRepository
 from controller.orchestrator import Orchestrator
 from controller.workflow import WorkflowEngine
 from controller.results import descriptor
+from controller import __version__ as LOADED_VERSION
 
 ASSETS = Path(__file__).with_name('web')
+
+
+class RuntimeIdentity:
+    """Startup source identity + bounded disk drift detection, never hot reload.
+
+    Only package source/assets are read; no runtime database, fleet file,
+    credential, task payload or path is included in the browser projection.
+    The digest identifies source at startup, not a proof of Python bytecode.
+    """
+    def __init__(self, root=None, *, version=LOADED_VERSION, interval=30):
+        self.root = Path(root or ASSETS.parent.parent).resolve()
+        self.interval, self.last_check = interval, float('-inf')
+        self.lock = threading.Lock()
+        self.state = {'loaded_version': version, 'started_at': self._now(),
+                      'loaded_source_sha256': None, 'disk_source_sha256': None,
+                      'restart_required': False, 'source_state': 'unavailable',
+                      'checked_at': None}
+        self.poll()
+        self.state['loaded_source_sha256'] = self.state['disk_source_sha256']
+
+    @staticmethod
+    def _now():
+        from .feed import now
+        return now()
+
+    def _digest(self):
+        digest, count, total = hashlib.sha256(), 0, 0
+        directories = 0
+        for folder, children, names in os.walk(self.root, followlinks=False):
+            children[:] = sorted(name for name in children if not name.startswith('.') and
+                name not in {'__pycache__', 'data', 'runtime', 'private', 'config', 'releases', 'snapshots'} and
+                not (Path(folder) / name).is_symlink())
+            directories += 1
+            if directories > 128:
+                raise ValueError('Source identity directory budget exceeded')
+            for name in sorted(names):
+                path = Path(folder) / name
+                if path.suffix not in {'.py', '.js', '.css', '.html'}:
+                    continue
+                if path.is_symlink() or not path.resolve().is_relative_to(self.root):
+                    raise ValueError('Source identity cannot follow links')
+                count += 1
+                size = path.stat().st_size
+                total += size
+                if count > 512 or size > 4 * 1024 * 1024 or total > 16 * 1024 * 1024:
+                    raise ValueError('Source identity budget exceeded')
+                digest.update(path.relative_to(self.root).as_posix().encode())
+                digest.update(b'\0')
+                digest.update(hashlib.sha256(path.read_bytes()).digest())
+        return digest.hexdigest()
+
+    def poll(self):
+        with self.lock:
+            if time.monotonic() - self.last_check < self.interval:
+                return
+            self.last_check = time.monotonic()
+            try:
+                fingerprint = self._digest()
+                self.state.update(disk_source_sha256=fingerprint, source_state='available',
+                    restart_required=bool(self.state['loaded_source_sha256'] and
+                                          fingerprint != self.state['loaded_source_sha256']))
+            except (OSError, ValueError):
+                self.state['source_state'] = 'unavailable'
+            self.state['checked_at'] = self._now()
+
+    def view(self):
+        with self.lock:
+            return dict(self.state)
 
 
 def select_primary(records, run_id=None):
@@ -54,7 +125,7 @@ def private_token(runtime, run_id, port):
     return secrets.token_urlsafe(32)
 
 
-def server(feed, port, token):
+def server(feed, port, token, runtime=None):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass  # No request URLs, auth headers or tokens in access logs.
@@ -69,6 +140,21 @@ def server(feed, port, token):
             self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
             self.end_headers()
             self.wfile.write(body)
+
+        def authorized(self, *, preference=False):
+            hosts = {f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}'}
+            origin = self.headers.get('Origin')
+            site = self.headers.get('Sec-Fetch-Site')
+            if (self.headers.get('Host') not in hosts or site == 'cross-site' or
+                    (origin and origin not in {'http://' + host for host in hosts}) or
+                    (preference and not origin and site != 'same-origin')):
+                self.reply(403, b'{"error":"Forbidden origin"}')
+                return False
+            if not hmac.compare_digest(self.headers.get('Authorization', '').encode(),
+                                       ('Bearer ' + token).encode()):
+                self.reply(401, b'{"error":"Open the dashboard using its private launch link"}')
+                return False
+            return True
 
         def do_GET(self):
             hosts = {f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}'}
@@ -95,6 +181,8 @@ def server(feed, port, token):
                             raise KeyError(run_id)
                 except KeyError:
                     return self.reply(404, b'{"error":"Unknown catalog run"}')
+                if runtime is not None:
+                    view['dashboard_runtime'] = runtime.view()
                 body = json.dumps(view['result'] if path == '/api/result' else view,
                                   ensure_ascii=True, allow_nan=False).encode()
                 return self.reply(200, body)
@@ -107,7 +195,29 @@ def server(feed, port, token):
             return self.reply(200, (ASSETS / name).read_bytes(), mime)
 
         def do_POST(self):
-            self.reply(405, b'{"error":"Read-only dashboard"}')
+            # The only writable surface is a local polling preference. No Run,
+            # worker, filesystem or gateway mutation is exposed by HTTP.
+            if self.path != '/api/focus' or not isinstance(feed, Catalog):
+                return self.reply(405, b'{"error":"Read-only dashboard"}')
+            if not self.authorized(preference=True):
+                return
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                if not 0 < length <= 256 or self.headers.get('Content-Type') != 'application/json':
+                    raise ValueError('Invalid preference')
+                self.connection.settimeout(2)
+                value = json.loads(self.rfile.read(length))
+                if (not isinstance(value, dict) or 'run_id' not in value or
+                        set(value) - {'run_id', 'expected_run_id'} or
+                        not isinstance(value['run_id'], str) or
+                        ('expected_run_id' in value and not isinstance(value['expected_run_id'], str))):
+                    raise ValueError('Invalid preference')
+                focus = feed.set_focus(value['run_id'], expected_run_id=value.get('expected_run_id'))
+            except (ValueError, UnicodeError, TimeoutError):
+                return self.reply(400, b'{"error":"Invalid preference"}')
+            except KeyError:
+                return self.reply(404, b'{"error":"Unknown catalog run or worker binding"}')
+            return self.reply(200, json.dumps(focus, allow_nan=False).encode())
 
     return ThreadingHTTPServer(('127.0.0.1', port), Handler)
 
@@ -214,15 +324,18 @@ def main(argv=None):
                    fleet=fleet_provider, remote_resolver=remote_resolver,
                    bridge_factory=bridge_factory)
     token = private_token(directory / 'server.json', args.run_id, args.port)
-    http = server(feed, args.port, token)  # Bind before starting any polling; duplicate launch fails safely.
+    runtime = RuntimeIdentity()
+    http = server(feed, args.port, token, runtime)  # Bind before starting any polling; duplicate launch fails safely.
     url = f'http://127.0.0.1:{args.port}/#{token}'
-    atomic_json(directory / 'server.json', {'pid': os.getpid(), 'url': url, 'run_id': args.run_id, 'port': args.port})
+    atomic_json(directory / 'server.json', {'pid': os.getpid(), 'url': url, 'run_id': args.run_id,
+                                         'port': args.port, 'runtime': runtime.view()})
     stop = threading.Event()
-    # Current-run metrics must not queue behind fleet scans and terminal history.
-    primary_bridge = feed.bridges.get(args.run_id)
-    if primary_bridge is not None:
-        primary_bridge.background_polling = True
-        threading.Thread(target=primary_bridge.run, args=(stop,), daemon=True).start()
+    # Fixed collectors follow the local preference, not a startup-only Run.
+    feed.enable_focus_collectors()
+    threading.Thread(target=feed.run_focused, args=(stop,),
+                     kwargs={'before_poll': runtime.poll}, daemon=True).start()
+    threading.Thread(target=feed.run_focused, args=(stop,),
+                     kwargs={'logs': True}, daemon=True).start()
     collector = threading.Thread(target=feed.run, args=(stop,), daemon=True)
     collector.start()
     print(f'Dashboard listening on http://127.0.0.1:{args.port}/ (private link in data/dashboard/server.json)', flush=True)

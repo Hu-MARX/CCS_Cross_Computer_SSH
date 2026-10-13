@@ -24,6 +24,90 @@ PLATFORM_SKIP_REASONS = LINUX_REQUIRED_SKIP_REASONS | WINDOWS_ONLY_SKIP_REASONS
 OPTIONAL_TRAINING_REASON = 'Configured training environment required'
 
 
+class _CountedTextResult(unittest.TextTestResult):
+    """Count executed parent outcomes; raw failures/errors may contain subtests."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._parent_outcomes = []
+        self._current_parent = None
+        self._fixture_errors = self._fixture_failures = 0
+        self._fixture_skips = 0
+        self._subtests = {'subtests_run': 0, 'passed_subtests': 0,
+                         'subtest_failures': 0, 'subtest_errors': 0, 'skipped_subtests': 0}
+
+    def startTest(self, test):
+        self._current_parent = (test, len(self._parent_outcomes))
+        self._parent_outcomes.append('unreported')
+        super().startTest(test)
+
+    def stopTest(self, test):
+        super().stopTest(test)
+        self._current_parent = None
+
+    def _parent_outcome(self, test, outcome):
+        parent = getattr(test, 'test_case', test)
+        if self._current_parent is None or parent is not self._current_parent[0]:
+            return False  # e.g. setUpClass errors: no parent test was started.
+        index = self._current_parent[1]
+        priority = {'unreported': 0, 'passed': 1, 'skipped': 2,
+                    'expected_failure': 3, 'unexpected_success': 4, 'failed': 5}
+        if priority[outcome] > priority[self._parent_outcomes[index]]:
+            self._parent_outcomes[index] = outcome
+        return True
+
+    def addSuccess(self, test):
+        self._parent_outcome(test, 'passed')
+        super().addSuccess(test)
+
+    def addFailure(self, test, err):
+        if not self._parent_outcome(test, 'failed'):
+            self._fixture_failures += 1
+        super().addFailure(test, err)
+
+    def addError(self, test, err):
+        if not self._parent_outcome(test, 'failed'):
+            self._fixture_errors += 1
+        super().addError(test, err)
+
+    def addSubTest(self, test, subtest, err):
+        self._subtests['subtests_run'] += 1
+        if err is None:
+            self._subtests['passed_subtests'] += 1
+        else:
+            key = 'subtest_failures' if issubclass(err[0], test.failureException) else 'subtest_errors'
+            self._subtests[key] += 1
+            self._parent_outcome(test, 'failed')
+        super().addSubTest(test, subtest, err)
+
+    def addSkip(self, test, reason):
+        if not self._parent_outcome(test, 'skipped'):
+            self._fixture_skips += 1
+        if getattr(test, 'test_case', None) is not None:
+            self._subtests['subtests_run'] += 1
+            self._subtests['skipped_subtests'] += 1
+        super().addSkip(test, reason)
+
+    def addExpectedFailure(self, test, err):
+        self._parent_outcome(test, 'expected_failure')
+        super().addExpectedFailure(test, err)
+
+    def addUnexpectedSuccess(self, test):
+        self._parent_outcome(test, 'unexpected_success')
+        super().addUnexpectedSuccess(test)
+
+    def counts(self):
+        return {'passed_tests': self._parent_outcomes.count('passed'),
+                'failed_tests': self._parent_outcomes.count('failed'),
+                'skipped_tests': self._parent_outcomes.count('skipped'),
+                'expected_failure_tests': self._parent_outcomes.count('expected_failure'),
+                'unexpected_success_tests': self._parent_outcomes.count('unexpected_success'),
+                'unreported_tests': self._parent_outcomes.count('unreported'),
+                'fixture_errors': self._fixture_errors, 'fixture_failures': self._fixture_failures,
+                'fixture_skips': self._fixture_skips,
+                **self._subtests}
+
+
 def selected_modules(group: str, root: Path = ROOT) -> list[Path]:
     if group == 'research':
         return sorted((root / 'tests' / 'research_integration').glob('test_*.py'))
@@ -100,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
         passed = True
         for group in groups:
             print(f'\nCCS verification group: {group}', flush=True)
-            result = unittest.TextTestRunner(verbosity=2).run(load_group(group))
+            result = unittest.TextTestRunner(verbosity=2, resultclass=_CountedTextResult).run(load_group(group))
             skips = [{'test': test.id(), 'reason': reason,
                       'category': 'optional-training-environment' if reason == OPTIONAL_TRAINING_REASON else 'platform'}
                      for test, reason in result.skipped]
@@ -109,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
                           (args.require_linux and item['reason'] in LINUX_REQUIRED_SKIP_REASONS)]
             accepted = result.wasSuccessful() and not unexpected
             report['groups'].append({'group': group, 'tests_run': result.testsRun,
-                                    'passed_tests': result.testsRun - len(result.failures) - len(result.errors) - len(skips),
+                                    **result.counts(),
                                     'failures': len(result.failures), 'errors': len(result.errors),
                                     'skipped': skips, 'status': 'passed' if accepted else 'failed'})
             if unexpected:

@@ -1,9 +1,8 @@
 """Read-only full-fit progress contract, with explicit resume/run bindings."""
 from bisect import bisect_left, bisect_right
 from itertools import accumulate
-from pathlib import PurePosixPath
 import math
-import re
+from .checkpoint_projection import reported_checkpoint, binding_digest
 
 
 def bounds(binding):
@@ -66,22 +65,8 @@ def report_snapshot(report, binding, collected_at):
     if (report.get('global_batches') != point['step'] or report.get('optimizer_updates') != point['updates']
             or report.get('completed_epochs') != point['metrics']['train/completed_epochs']):
         raise ValueError('Progress report counters mismatch')
-    result = dict(point=point, collected_at=collected_at)
+    result = dict(point=point, collected_at=collected_at, binding_sha256=binding_digest(binding))
     receipt = report.get('checkpoint')
     if receipt:
-        target = PurePosixPath(receipt['path'])
-        directory = (PurePosixPath(binding['snapshot']['project']) /
-                     PurePosixPath(binding['snapshot']['path']).parent / 'checkpoints')
-        step = receipt.get('global_batches')
-        if (target.parent != directory or '..' in target.parts
-                or not re.fullmatch(r'batch-\d{7}\.pth', target.name)
-                or type(step) is not int or not 0 < step <= point['step']
-                or target.name != 'batch-%07d.pth' % step
-                or receipt.get('training_signature') != binding['config_sha256']
-                or not re.fullmatch('[a-f0-9]{64}', str(receipt.get('sha256', '')))):
-            raise ValueError('Checkpoint receipt binding mismatch')
-        # Receipt is reported by the trainer; do not claim a fresh binary rehash/restore test.
-        result['checkpoint'] = dict(state='reported_committed', step=step, path=str(target),
-            id=target.name, sha256=receipt['sha256'], created_at=None, safe_to_resume=None,
-            observed_at=collected_at, source='trainer atomic-checkpoint receipt')
+        result['checkpoint'] = reported_checkpoint(receipt, binding, collected_at, point['step'], fullfit=True)
     return result

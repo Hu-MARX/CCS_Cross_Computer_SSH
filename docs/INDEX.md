@@ -1,6 +1,6 @@
 # CCS 文档导航
 
-当前代码版本为 **0.6.1**。安装环境、Worker 部署、运行授权与验收范围应分别确认；本机代码测试通过不代表已经部署了远端能力。
+当前源码候选版本为 **0.6.2**。安装环境、Worker 部署、运行授权与验收范围应分别确认；本机代码测试通过不代表已经部署了远端能力。候选变更范围见 [0.6.2 记录](RELEASE-0.6.2.md)。
 
 ## 第一次使用
 
@@ -23,6 +23,9 @@
 | 事务式远端工作区修改 | [受限远端工作区](REMOTE-WORKSPACE.md) |
 | 区分观察、产物绑定与执行证据 | [产物绑定](ARTIFACT-BINDING.md)、[证据状态](EVIDENCE-STATUS.md) |
 | Windows 本机只读看板 | [Windows 看板](WINDOWS-DASHBOARD.md)、[看板配置面板](CONFIGURATION-PANEL.md)、[训练指标 JSON](DASHBOARD-JSON-TRAINING-METRICS.md) |
+| 区分日志步数、完整断点与恢复能力 | [断点观测合同](DASHBOARD-RECOVERY.md) |
+| 动态关注 Run 与加载版本/源码变化提醒 | [采集焦点](dashboard-collector-focus.md) |
+| 升级前确认多角色版本与 busy 保护 | [只读升级预检](UPGRADE-PREFLIGHT.md) |
 | 研究 Study/Stage 工作流 | [研究自动化](RESEARCH-AUTOMATION.md)、[Study 工作流](STUDY-WORKFLOWS.md)、[阶段决策包](STAGE-DECISION-PACKAGES.md) |
 | 构建 wheel/sdist、分组验证、升级回退 | [发布流程](RELEASING.md)、[支持矩阵](SUPPORT-MATRIX.md) |
 

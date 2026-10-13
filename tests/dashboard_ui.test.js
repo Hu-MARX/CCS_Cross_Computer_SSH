@@ -22,6 +22,55 @@ function page(savedSelection=null,search=''){
 function state(){return {run_id:'run_test',name:'CVFDETR',epochs:50,connection:'fresh',catching_up:false,errors:{},points:[],alerts:[],
   sample_age_seconds:3,interval_seconds:30,latest:{status:'RUNNING',epoch:0,step:12,updates:10,phase:'train',progress_state:'advancing',loss:null},monitor:{health:{gpu:[]}}};}
 
+test('dashboard runtime drift is distinct from worker version and another tab focus',()=>{
+  const p=page(),d=state();d.dashboard_runtime={loaded_version:'0.6.1',restart_required:true};
+  d.collector_focus={run_id:'run_other',worker:'worker-two'};p.render(d);
+  assert.match(p.elements.get('dashboard-version').textContent,/v0.6.1/);
+  assert.match(p.elements.get('dashboard-runtime-note').textContent,/源码已变化.*无需重启训练/);
+  assert.match(p.elements.get('collector-focus').textContent,/worker-two.*另一标签页.*普通刷新不抢占/);
+  assert.equal(p.run('selectedRun'),null);
+});
+
+test('reported recovery projection separates logs checkpoint and replay without claiming verified',()=>{
+  const p=page(),d=state();d.recovery={logged_step:14680,progress_step:14692,
+    checkpoint_step:14600,replay_steps:92,resume_capability:'reported_only',safe_to_resume:null,
+    checkpoint_source:'trainer atomic-checkpoint receipt'};p.render(d);
+  assert.equal(p.elements.get('recovery-log-step').textContent,'14,680');
+  assert.equal(p.elements.get('recovery-progress-step').textContent,'14,692');
+  assert.equal(p.elements.get('recovery-checkpoint-step').textContent,'14,600');
+  assert.match(p.elements.get('recovery-replay').textContent,/截至已观测进展需重算 92 步.*非实际断电丢失上界/);
+  assert.match(p.elements.get('recovery-note').textContent,/尚未验证.*不触发续训/);
+  d.recovery={resume_capability:'unknown',replay_steps:null};p.render(d);
+  assert.match(p.elements.get('recovery-replay').textContent,/未知/);
+  assert.equal(p.elements.get('recovery-checkpoint-step').textContent,'—');
+  d.recovery={resume_capability:'verified',replay_steps:0};p.render(d);
+  assert.match(p.elements.get('recovery-note').textContent,/worker 报告可恢复.*非实际恢复测试/);
+});
+
+test('explicit focus posts once but regular refresh never reclaims another tab focus',async()=>{
+  const p=page('run_test');
+  await p.run(`busy=false;globalThis.posts=[];render=()=>{};
+    fetch=async (url,options)=>{
+      if(options.method==='POST'){posts.push(JSON.parse(options.body));return {ok:true,json:async()=>({run_id:'run_test',worker:'worker-one'})};}
+      return {ok:true,json:async()=>({run_id:'run_test'})};
+    };
+    selectRun('run_test');`);
+  await new Promise(resolve=>setImmediate(resolve));
+  await p.run('refresh()');
+  assert.equal(p.run('posts.length'),1);
+  assert.equal(p.run('posts[0].run_id'),'run_test');
+  assert.deepEqual(Array.from(p.run('Object.keys(posts[0])')),['run_id']);
+});
+
+test('automatic follow changes display but does not steal a different tab collector focus',()=>{
+  const p=page('run_old');p.run('followLive=true;focusPending=false');
+  p.run(`acceptSelection({run_id:'run_old',collector_focus:{run_id:'run_foreign'},catalog:[
+    {run_id:'run_old',last_status:'SUCCEEDED',connection:'fresh'},
+    {run_id:'run_live',last_status:'RUNNING',connection:'fresh'}]})`);
+  assert.equal(p.run('selectedRun'),'run_live');
+  assert.equal(p.run('focusPending'),false);
+});
+
 test('full-fit epoch and receipt rendering never claims nominal coverage or binary verification',()=>{
   const p=page(),d=state();d.epochs=100;d.latest.epoch=4;d.latest.step=4910;d.latest.updates=4908;
   d.latest.metrics={'train/completed_epochs':4,'train/epoch_batch':740,'train/epoch_batches':1043};
