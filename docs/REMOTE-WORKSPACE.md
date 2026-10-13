@@ -11,6 +11,11 @@
 
 不要给 `mlrunner` 增加研究目录写权限。两个 Adapter 使用同一个协议，但承担不同权限。
 
+`ccsctl` 的 `workspace.execute` 在预演和执行时检查实际工作区 Adapter 的能力声明，
+使用与执行相同的 `workspace_user`、`workspace_root` 和 `workspace_executable`。
+训练 Adapter 的新版能力不能替代旧工作区入口的声明：旧工作区仍可只读检查，但变更
+必须由已声明 `workspace.control` 的工作区入口执行；训练入口的版本不决定该兼容性。
+
 ## Windows 调用前缀
 
 ```powershell
