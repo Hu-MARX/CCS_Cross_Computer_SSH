@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 from contextlib import ExitStack
-from controller.domain import ExperimentSpec, RunStatus
+from controller.domain import ExperimentSpec, RunStatus, utc_now
 from .run_store import RunStore, TrainCtlError
 from .locking import file_lock
 from .resources import Interrupted, gpu_slot
@@ -38,6 +38,19 @@ def stop_children(process):
             except ProcessLookupError:
                 pass
     process.wait(timeout=10)
+
+
+def process_group_quiescent(process):
+    """Group-only evidence: detached helpers are outside this scope."""
+    if process.poll() is None or os.name != 'posix':
+        return False
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        return True
+    except PermissionError:
+        return False
+    return False
 
 
 def execute(argv, *, workdir, env, run_dir, deadline, store, phase, started_event='child_started'):
@@ -70,6 +83,13 @@ def execute(argv, *, workdir, env, run_dir, deadline, store, phase, started_even
             stop_children(child)
         finally:
             capture.finish()
+        store._atomic_json(run_dir / 'runner-cleanup.json', {
+            'schema_version': 1, 'run_id': run_dir.name, 'supervisor_pid': os.getpid(),
+            'child_pid': child.pid, 'child_exit_code': child.returncode, 'phase': phase.value,
+            'scope': 'process_group' if os.name == 'posix' else 'unverified',
+            'process_group_quiescent': process_group_quiescent(child) if os.name == 'posix' else None,
+            'completed_at': utc_now(),
+        })
 
 
 def supervise(run_dir):
@@ -89,6 +109,10 @@ def supervise(run_dir):
             env.update({str(k): str(v) for k, v in spec.runtime.get('environment_variables', {}).items()})
             env['TRAINCTL_RUN_DIR'] = str(run_dir)
             env['TRAINCTL_RUN_ID'] = run_dir.name
+            if (spec.task or {}).get('pause'):
+                from controller.configuration import spec_digest
+                env['TRAINCTL_SPEC_SHA256'] = spec_digest(spec.to_dict())
+                env['TRAINCTL_CHECKPOINT_DIR'] = str(workdir / 'orchestrator_runs' / run_dir.name / 'checkpoints')
             from .evidence_gate import check
             if spec.evidence:
                 env['TRAINCTL_EVIDENCE_ID'] = spec.evidence['bundle_id']
@@ -111,15 +135,30 @@ def supervise(run_dir):
             options = dict(workdir=workdir, env=training_env, run_dir=run_dir, deadline=deadline, store=store)
             with watching(store, run_dir, spec, env, workdir):
                 code = execute(argv, phase=RunStatus.RUNNING, **options)
-            if code == 0 and spec.evaluation.get('argv'):
-                store._set_status(run_dir, RunStatus.EVALUATING)
-                store._append_event(run_dir, 'evaluation_started', {})
-                argv = [arg.replace('${RUN_ID}', run_dir.name) for arg in spec.evaluation['argv']]
-                code = execute(argv, phase=RunStatus.EVALUATING, **options)
             if (run_dir / 'cancel.json').exists():
                 raise Interrupted('CANCELLED')
-            target = RunStatus.SUCCEEDED if code == 0 else RunStatus.FAILED
-            error = None
+            if code == 85:
+                from .pause_control import validate_ack
+                try:
+                    if not (spec.task or {}).get('pause'):
+                        raise ValueError('Run did not declare cooperative pause support')
+                    validate_ack(run_dir, (spec.task or {}).get('pause'),
+                                 checkpoint_directory=Path(env['TRAINCTL_CHECKPOINT_DIR']),
+                                 spec_digest=env['TRAINCTL_SPEC_SHA256'])
+                except (OSError, ValueError, TypeError, KeyError) as exc:
+                    target, error = RunStatus.FAILED, 'PAUSE_ACK_INVALID: ' + str(exc)
+                else:
+                    target, error = RunStatus.CANCELLED, 'PAUSED'
+            else:
+                if code == 0 and spec.evaluation.get('argv'):
+                    store._set_status(run_dir, RunStatus.EVALUATING)
+                    store._append_event(run_dir, 'evaluation_started', {})
+                    argv = [arg.replace('${RUN_ID}', run_dir.name) for arg in spec.evaluation['argv']]
+                    code = execute(argv, phase=RunStatus.EVALUATING, **options)
+                if (run_dir / 'cancel.json').exists():
+                    raise Interrupted('CANCELLED')
+                target = RunStatus.SUCCEEDED if code == 0 else RunStatus.FAILED
+                error = None
         except Interrupted as exc:
             target = RunStatus.CANCELLED if str(exc) == 'CANCELLED' else RunStatus.FAILED
             code = 130 if target == RunStatus.CANCELLED else 124

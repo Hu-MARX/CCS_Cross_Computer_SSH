@@ -149,7 +149,10 @@ def create_server(client: CCSClient, *, read_only: bool = False, allow_actions=N
         """Prepare an operation without executing it; records local audit metadata.
 
         run.submit payload: {worker_id, idempotency_key, spec: <ExperimentSpec>}.
-        run.cancel: {run_id, reason, worker_id?}. checkpoint.replicate:
+        run.cancel: {run_id, reason, worker_id?}.
+        run.pause: {run_id, reason, worker_id?, timeout_seconds?}; confirmed
+        delivery is not a saved checkpoint or stopped training. Inspect snapshot.pause.
+        checkpoint.replicate:
         {run_id, checkpoint_id, worker_id?}. checkpoint.import:
         {source_worker_id, source_run_id, checkpoint_id, target_worker_id}.
         workspace.execute: {worker_id, request:{action,...}}; actions include
@@ -182,6 +185,8 @@ def create_server(client: CCSClient, *, read_only: bool = False, allow_actions=N
         Read operation.query/reconcile to recover unknown outcomes; never change
         worker or key to bypass an unresolved operation.
         Checkpoint import does not itself start a resumed training Run.
+        For run.pause inspect run.snapshot using the original worker, Run and request_id;
+        operation.reconcile does not reconcile pause requests or repeat them.
         Cancelling MCP waiting stops its local subprocess; it never calls run.cancel.
         """
         if action not in MUTATION_ACTIONS:

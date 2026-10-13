@@ -62,7 +62,7 @@ def _mutation(request):
         payload = payload if isinstance(payload, dict) else {}
         nested = payload.get('request')
         return (nested.get('action') if isinstance(nested, dict) else None) not in {'inspect', 'diff', 'changes'}
-    return action in {'run.submit', 'run.cancel', 'checkpoint.replicate', 'checkpoint.import'}
+    return action in {'run.submit', 'run.cancel', 'run.pause', 'checkpoint.replicate', 'checkpoint.import'}
 
 
 def _correlation(request):

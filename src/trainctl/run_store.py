@@ -21,9 +21,11 @@ from .locking import file_lock
 
 
 class TrainCtlError(RuntimeError):
-    def __init__(self, code: str, message: str, *, retryable: bool = False):
+    def __init__(self, code: str, message: str, *, retryable: bool = False,
+                 execution_state: str | None = None):
         super().__init__(message)
         self.code, self.message, self.retryable = code, message, retryable
+        self.execution_state = execution_state
 
 
 class RunStore:
@@ -199,7 +201,12 @@ class RunStore:
 
     def snapshot(self, run_id: str) -> dict[str, Any]:
         run_dir = self._require_run(run_id)
-        status = self._read_json(run_dir / "status.json", {})
+        # Writers already hold this lock around atomic publication. Windows
+        # sharing rules require readers not to open the old file while that
+        # replacement is in flight; synchronize this read rather than hiding a
+        # permission error or fabricating a successful snapshot.
+        with file_lock(run_dir / 'status.lock'):
+            status = self._read_json(run_dir / "status.json", {})
         status["health"] = self._gpu_snapshot()
         status['observation'] = self._read_json(run_dir / 'observation.json', None)
         binding = self._read_json(run_dir / 'manifest.json', {}).get('evidence')
@@ -226,7 +233,36 @@ class RunStore:
             observed = status['observation'].get('observed_at')
             if observed and age(observed) > max(60, 3 * self.config().get('monitor_interval', 15)):
                 status['observation']['observation_state'] = 'stale'
+        status['pause'] = self.pause_status(run_dir, status)
         return status
+
+    def pause_status(self, run_dir: Path, lifecycle: dict, execution: dict | None = None):
+        """Read pause facts separately from lifecycle and process liveness."""
+        raw = self._read_json(run_dir / 'spec.json', {})
+        declaration = (raw.get('task') or {}).get('pause')
+        if declaration is None:
+            return None
+        try:
+            from controller.configuration import spec_digest
+            from .pause_control import status
+            manifest = self._read_json(run_dir / 'manifest.json', {})
+            base = Path(manifest.get('submission_cwd') or run_dir)
+            workdir = Path(raw.get('runtime', {}).get('workdir') or base)
+            if not workdir.is_absolute():
+                workdir = base / workdir
+            directory = workdir.resolve() / 'orchestrator_runs' / run_dir.name / 'checkpoints'
+            # An ACK is never proof that training has stopped. Even a terminal
+            # status needs independent backend cleanup evidence.
+            paused_result = (lifecycle.get('status') == 'CANCELLED' and
+                             lifecycle.get('error') == 'PAUSED' and lifecycle.get('exit_code') == 85)
+            if paused_result and execution is None:
+                execution = self.reconcile_execution(run_dir)
+            quiescent = paused_result and bool((execution or {}).get('quiescent'))
+            return status(run_dir, declaration, checkpoint_directory=directory,
+                          spec_digest=spec_digest(raw), quiescent=quiescent)
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            return {'schema_version': 1, 'state': 'invalid', 'safe_to_resume': False,
+                    'error': str(exc)[:1000]}
 
     def logs(self, run_id: str, stream: str = "stdout", after_offset: int = 0) -> dict[str, Any]:
         if stream not in {"stdout", "stderr"}:
@@ -377,6 +413,51 @@ class RunStore:
             raise TrainCtlError(exc.code, exc.message) from exc
         return {'artifacts': selected, 'next_cursor': next_cursor, 'has_more': more, 'truncated': truncated}
 
+    def pause(self, run_id: str, reason: str, request_id: str,
+              timeout_seconds: int = 600) -> dict[str, Any]:
+        """Persist an opt-in cooperative request; never signal or cancel a task."""
+        try:
+            run_dir = self._require_run(run_id)
+        except TrainCtlError as exc:
+            if exc.code in {'INVALID_RUN_ID', 'RUN_NOT_FOUND'}:
+                raise TrainCtlError(exc.code, exc.message, retryable=exc.retryable,
+                                    execution_state='rejected') from exc
+            raise
+        raw = self._read_json(run_dir / 'spec.json', {})
+        task = raw.get('task') or {}
+        declaration = task.get('pause') if isinstance(task, dict) else None
+        if not isinstance(task, dict) or task.get('kind') != 'train' or declaration is None:
+            raise TrainCtlError('PAUSE_NOT_SUPPORTED', 'Run did not declare cooperative pause support',
+                                execution_state='rejected')
+        if (not isinstance(reason, str) or not reason.strip() or len(reason) > 1024 or
+                not isinstance(request_id, str) or
+                not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}', request_id) or
+                type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 3600):
+            raise TrainCtlError('INVALID_PAUSE_REQUEST', 'Invalid reason, request identity, or timeout',
+                                execution_state='rejected')
+        from controller.configuration import spec_digest
+        from .pause_control import create_request
+        # Serialize with final publication: a new pause cannot be introduced
+        # after a terminal result, while an existing immutable identity can be read.
+        with file_lock(run_dir / 'finish.lock'):
+            status = self._read_json(run_dir / 'status.json', {})
+            if (not (run_dir / 'pause-request.json').exists() and
+                    status.get('status') not in {'QUEUED', 'PREPARING', 'RUNNING'}):
+                raise TrainCtlError('PAUSE_NOT_ACTIVE', 'Run is no longer in its training phase',
+                                    execution_state='rejected')
+            try:
+                create_request(run_dir, declaration, request_id=request_id,
+                               reason=reason, timeout_seconds=timeout_seconds,
+                               spec_digest=spec_digest(raw))
+            except ValueError as exc:
+                code = ('PAUSE_REQUEST_CONFLICT' if str(exc).startswith('PAUSE_REQUEST_CONFLICT:')
+                        else 'INVALID_PAUSE_REQUEST')
+                # Only an explicit immutable-request conflict proves rejection.
+                # Storage, publication, and later snapshot failures stay unknown.
+                execution_state = 'rejected' if code == 'PAUSE_REQUEST_CONFLICT' else None
+                raise TrainCtlError(code, str(exc), execution_state=execution_state) from exc
+        return self.snapshot(run_id)
+
     def cancel(self, run_id: str, reason: str) -> dict[str, Any]:
         run_dir = self._require_run(run_id)
         status = self._read_json(run_dir / "status.json", {})
@@ -436,7 +517,19 @@ class RunStore:
         execution = manifest.get('execution', {})
         status = self._read_json(run_dir / 'status.json', {})
         if execution.get('backend') != 'systemd':
-            return {'backend': 'process', 'verified': False}
+            finalized = self._read_json(run_dir / 'runner-cleanup.json', {})
+            group_verified = (RunStatus(status['status']).terminal and
+                              finalized.get('schema_version') == 1 and
+                              finalized.get('run_id') == run_dir.name and
+                              finalized.get('supervisor_pid') == status.get('pid') and
+                              finalized.get('scope') == 'process_group' and
+                              finalized.get('process_group_quiescent') is True)
+            # A legal setsid()/start_new_session helper escapes the launcher
+            # group. Group cleanup is useful evidence, not proof of full-Run
+            # quiescence; only the managed systemd cgroup has that scope.
+            return {'backend': 'process', 'verified': False, 'quiescent': False,
+                    'scope': 'process_group' if group_verified else 'unverified',
+                    'process_group_quiescent': True if group_verified else None}
         if execution.get('boot_id') != boot_id():
             if not RunStatus(status['status']).terminal:
                 self.finish(run_dir, RunStatus.FAILED, exit_code=1, error='WORKER_REBOOTED')

@@ -267,6 +267,27 @@
                   },
                   "maxItems": 64
                 },
+                "pause": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": 1
+                    },
+                    "protocol": {
+                      "const": "managed-checkpoint-v1"
+                    },
+                    "contract": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "protocol",
+                    "contract"
+                  ],
+                  "additionalProperties": false
+                },
                 "checkpoint": {
                   "anyOf": [
                     {
@@ -280,6 +301,22 @@
               },
               "required": [
                 "kind"
+              ],
+              "allOf": [
+                {
+                  "if": {
+                    "required": [
+                      "pause"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "kind": {
+                        "const": "train"
+                      }
+                    }
+                  }
+                }
               ],
               "additionalProperties": false
             },

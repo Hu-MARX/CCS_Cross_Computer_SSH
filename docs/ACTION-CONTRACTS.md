@@ -338,6 +338,8 @@ Output schemas describe `result` after execution. A dry-run result may be null o
 | evidence_runtime | optional null | null |  |
 | source_snapshot | optional | object |  |
 | source_snapshot | optional null | null |  |
+| pause | optional | object |  |
+| pause | optional null | null |  |
 | runtime_configuration | optional | object |  |
 | runtime_configuration | optional null | null |  |
 | * | optional | metadata | additional fields permitted |
@@ -579,6 +581,9 @@ Output schemas describe `result` after execution. A dry-run result may be null o
 | spec.task.inputs | optional | array | maxItems=64 |
 | spec.task.inputs[].path | required | string | minLength=1; maxLength=4096 |
 | spec.task.inputs[].sha256 | required | string | format=^[a-f0-9]{64}$ |
+| spec.task.pause.schema_version | required | JSON | const=1 |
+| spec.task.pause.protocol | required | JSON | const="managed-checkpoint-v1" |
+| spec.task.pause.contract | required | string | format=^[a-f0-9]{64}$ |
 | spec.task.checkpoint.path | required | string | minLength=1; maxLength=4096 |
 | spec.task.checkpoint.sha256 | required | string | format=^[a-f0-9]{64}$ |
 | spec.task.checkpoint | optional null | null |  |
@@ -636,6 +641,9 @@ Output schemas describe `result` after execution. A dry-run result may be null o
 | spec.task.inputs | optional | array | maxItems=64 |
 | spec.task.inputs[].path | required | string | minLength=1; maxLength=4096 |
 | spec.task.inputs[].sha256 | required | string | format=^[a-f0-9]{64}$ |
+| spec.task.pause.schema_version | required | JSON | const=1 |
+| spec.task.pause.protocol | required | JSON | const="managed-checkpoint-v1" |
+| spec.task.pause.contract | required | string | format=^[a-f0-9]{64}$ |
 | spec.task.checkpoint.path | required | string | minLength=1; maxLength=4096 |
 | spec.task.checkpoint.sha256 | required | string | format=^[a-f0-9]{64}$ |
 | spec.task.checkpoint | optional null | null |  |
@@ -700,6 +708,54 @@ Output schemas describe `result` after execution. A dry-run result may be null o
 - Evidence-bound commands require absolute Python and .py entry paths (optional -u/-B); evaluation must run inside that entry.
 - No automatic mutation retry; query/reconcile original operation or idempotency key after an unknown result.
 
+### run.pause
+
+**Classification:** mutation. Request a cooperative checkpoint-before-stop handshake for one opted-in Run.
+
+**Input fields (`payload`)**
+
+| Field | Presence | Type | Constraints |
+| --- | --- | --- | --- |
+| run_id | required | string | format=^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ |
+| worker_id | optional | string | format=^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ |
+| reason | required | string | minLength=1; maxLength=500; format=\S |
+| timeout_seconds | optional | integer | minimum=1; maximum=3600; default=600 |
+
+**Output fields (`result`)**
+
+| Field | Presence | Type | Constraints |
+| --- | --- | --- | --- |
+| run_id | required | string | format=^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ |
+| worker_id | required | string | format=^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ |
+| status | required | JSON | enum=["QUEUED", "PREPARING", "RUNNING", "EVALUATING", "SUCCEEDED", "FAILED", "CANCELLED", "LOST"] |
+| pause.schema_version | required | JSON | const=1 |
+| pause.request_id | required | string | format=^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ |
+| pause.state | required | JSON | enum=["unsupported", "not_requested", "requested", "expired", "checkpoint_committed", "checkpoint_unverified", "paused", "invalid"] |
+| pause.* | optional | metadata | additional fields permitted |
+| * | optional | metadata | additional fields permitted |
+
+**Examples (payload only)**
+
+```json
+[
+  {
+    "run_id": "run_example",
+    "worker_id": "worker-a",
+    "reason": "User requested maintenance pause",
+    "timeout_seconds": 600
+  }
+]
+```
+
+**Execution constraints**
+
+- Requires run.pause=1 and task.pause opt-in to managed-checkpoint-v1. Legacy workers are rejected; this is not the legacy run.cancel exception.
+- Uses explicit worker_id, otherwise the controller Run record; an unregistered Run in a multi-worker pool requires worker_id. No alternate account or worker is substituted.
+- Mutation requires dry-run then exact confirm_plan_sha256 with unchanged request identity, actor and payload. request_id binds the durable worker pause receipt.
+- A confirmed requested receipt confirms delivery, not a saved checkpoint or stopped training. Read run.snapshot pause and checkpoint facts until the handshake completes.
+- Timeout or invalid checkpoint acknowledgement never authorizes forced cancellation. Unknown delivery requires operation.query and run.snapshot inspection; do not automatically resend or use a new request identity.
+- Resume is an independently approved new run.submit with validated checkpoint input and source_run_id lineage, not a restart of the paused Run.
+
 ### run.cancel
 
 **Classification:** mutation. Cancel one selected Run with an audit reason.
@@ -735,6 +791,8 @@ Output schemas describe `result` after execution. A dry-run result may be null o
 | evidence_runtime | optional null | null |  |
 | source_snapshot | optional | object |  |
 | source_snapshot | optional null | null |  |
+| pause | optional | object |  |
+| pause | optional null | null |  |
 | runtime_configuration | optional | object |  |
 | runtime_configuration | optional null | null |  |
 | * | optional | metadata | additional fields permitted |
@@ -1371,7 +1429,7 @@ Output schemas describe `result` after execution. A dry-run result may be null o
 
 | Field | Presence | Type | Constraints |
 | --- | --- | --- | --- |
-| action | optional | JSON | enum=["worker.health", "worker.monitor", "worker.alerts", "worker.storage", "worker.processes", "run.snapshot", "run.events", "run.logs", "run.artifacts", "run.submit", "run.cancel", "checkpoint.replicate", "checkpoint.import", "workspace.execute", "fleet.status", "gateway.audit", "operation.query", "operation.reconcile", "gateway.describe"] |
+| action | optional | JSON | enum=["worker.health", "worker.monitor", "worker.alerts", "worker.storage", "worker.processes", "run.snapshot", "run.events", "run.logs", "run.artifacts", "run.submit", "run.pause", "run.cancel", "checkpoint.replicate", "checkpoint.import", "workspace.execute", "fleet.status", "gateway.audit", "operation.query", "operation.reconcile", "gateway.describe"] |
 | workspace_action | optional | JSON | enum=["inspect", "diff", "changes", "stage", "apply", "restore", "discard"] |
 
 **Output fields (`result`)**

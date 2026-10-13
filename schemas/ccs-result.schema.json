@@ -21,6 +21,7 @@
         "run.logs",
         "run.artifacts",
         "run.submit",
+        "run.pause",
         "run.cancel",
         "checkpoint.replicate",
         "checkpoint.import",
@@ -935,6 +936,88 @@
               "spec",
               "worker",
               "idempotency_key"
+            ],
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "run.pause"
+          },
+          "executed": {
+            "const": true
+          }
+        },
+        "required": [
+          "action",
+          "executed"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "type": "object",
+            "properties": {
+              "run_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "status": {
+                "enum": [
+                  "QUEUED",
+                  "PREPARING",
+                  "RUNNING",
+                  "EVALUATING",
+                  "SUCCEEDED",
+                  "FAILED",
+                  "CANCELLED",
+                  "LOST"
+                ]
+              },
+              "pause": {
+                "type": "object",
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "request_id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+                  },
+                  "state": {
+                    "enum": [
+                      "unsupported",
+                      "not_requested",
+                      "requested",
+                      "expired",
+                      "checkpoint_committed",
+                      "checkpoint_unverified",
+                      "paused",
+                      "invalid"
+                    ]
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "request_id",
+                  "state"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "run_id",
+              "worker_id",
+              "status",
+              "pause"
             ],
             "additionalProperties": true
           }
@@ -2527,6 +2610,16 @@
             }
           ]
         },
+        "pause": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "runtime_configuration": {
           "anyOf": [
             {
@@ -2874,6 +2967,27 @@
                   },
                   "maxItems": 64
                 },
+                "pause": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": 1
+                    },
+                    "protocol": {
+                      "const": "managed-checkpoint-v1"
+                    },
+                    "contract": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "protocol",
+                    "contract"
+                  ],
+                  "additionalProperties": false
+                },
                 "checkpoint": {
                   "anyOf": [
                     {
@@ -2887,6 +3001,22 @@
               },
               "required": [
                 "kind"
+              ],
+              "allOf": [
+                {
+                  "if": {
+                    "required": [
+                      "pause"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "kind": {
+                        "const": "train"
+                      }
+                    }
+                  }
+                }
               ],
               "additionalProperties": false
             },

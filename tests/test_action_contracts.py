@@ -41,7 +41,7 @@ class ActionContractTests(unittest.TestCase):
         expected = {
             'gateway.describe', 'gateway.audit', 'fleet.status', 'worker.health', 'worker.monitor', 'worker.alerts',
             'worker.storage', 'worker.processes', 'run.snapshot', 'run.events', 'run.logs', 'run.artifacts',
-            'run.submit', 'run.cancel', 'checkpoint.replicate', 'checkpoint.import', 'workspace.execute',
+            'run.submit', 'run.cancel', 'run.pause', 'checkpoint.replicate', 'checkpoint.import', 'workspace.execute',
             'operation.query', 'operation.reconcile',
         }
         self.assertEqual(set(describe()['actions']), expected)

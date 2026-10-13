@@ -78,6 +78,7 @@ ccsctl --fleet .\config\worker-pool.json `
 | `run.artifacts` | 只读 | `run_id`，可选绝对 `path`；可加 `cursor` / `limit` / `max_bytes` 启用有界分页 |
 | `run.submit` | 变更 | `spec`、`idempotency_key`；多从机时必须有 Agent 选择的 `worker_id` |
 | `run.cancel` | 变更 | `run_id`、`reason`，未纳管 Run 需给出 `worker_id` |
+| `run.pause` | 变更 | `run_id`、`reason`、可选 `timeout_seconds`；需要所选 worker 能力和训练器声明支持，送达不是暂停完成 |
 | `checkpoint.replicate` | 变更 | `run_id`、`checkpoint_id`；未纳管 Run 需给出 `worker_id` |
 | `checkpoint.import` | 变更 | `source_worker_id`、`source_run_id`、`checkpoint_id`、`target_worker_id` |
 | `workspace.execute` | 由子动作决定 | `request`，多从机时必须给出 `worker_id` |

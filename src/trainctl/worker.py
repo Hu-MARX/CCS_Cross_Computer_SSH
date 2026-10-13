@@ -115,6 +115,7 @@ def observe(store, telemetry):
                 'last_progress_at': last_progress, 'progress_signature': signature,
                 'progress': progress, 'runtime_configuration': runtime_configuration,
                 'checkpoint': checkpoint, 'evidence_runtime': runtime_evidence,
+                'pause': store.pause_status(run_dir, status, execution),
                 'logs': {stream: log_size(run_dir, stream) for stream in ('stdout', 'stderr')}}
             store._atomic_json(run_dir / 'observation.json', observation)
             telemetry.record(run_dir.name, at, observation)

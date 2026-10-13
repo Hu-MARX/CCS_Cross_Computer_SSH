@@ -26,6 +26,7 @@ _CAPABILITIES = {
     'run.logs': 1,
     'run.lookup': 1,
     'run.observe': 1,
+    'run.pause': 1,
     'run.submit': 1,
     'runtime.configuration': 1,
     'source.snapshot': 1,
@@ -60,6 +61,8 @@ def requirements_for_spec(spec: Any) -> dict[str, int]:
         required['task.metadata'] = 1
         if spec.task.get('checkpoint') is not None:
             required['checkpoint.input_gate'] = 1
+        if spec.task.get('pause') is not None:
+            required['run.pause'] = 1
     evidence = getattr(spec, 'evidence', None)
     if evidence is not None:
         required.update({'evidence.bundle': 1, 'evidence.launch_gate': 1})

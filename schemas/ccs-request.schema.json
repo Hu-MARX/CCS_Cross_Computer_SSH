@@ -43,6 +43,7 @@
         "run.logs",
         "run.artifacts",
         "run.submit",
+        "run.pause",
         "run.cancel",
         "checkpoint.replicate",
         "checkpoint.import",
@@ -457,6 +458,52 @@
       "if": {
         "properties": {
           "action": {
+            "const": "run.pause"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "run_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "worker_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500,
+                "pattern": "\\S"
+              },
+              "timeout_seconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3600,
+                "default": 600
+              }
+            },
+            "required": [
+              "run_id",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
             "const": "run.cancel"
           }
         },
@@ -802,6 +849,7 @@
                   "run.logs",
                   "run.artifacts",
                   "run.submit",
+                  "run.pause",
                   "run.cancel",
                   "checkpoint.replicate",
                   "checkpoint.import",
@@ -1099,6 +1147,27 @@
                   },
                   "maxItems": 64
                 },
+                "pause": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "const": 1
+                    },
+                    "protocol": {
+                      "const": "managed-checkpoint-v1"
+                    },
+                    "contract": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "protocol",
+                    "contract"
+                  ],
+                  "additionalProperties": false
+                },
                 "checkpoint": {
                   "anyOf": [
                     {
@@ -1112,6 +1181,22 @@
               },
               "required": [
                 "kind"
+              ],
+              "allOf": [
+                {
+                  "if": {
+                    "required": [
+                      "pause"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "kind": {
+                        "const": "train"
+                      }
+                    }
+                  }
+                }
               ],
               "additionalProperties": false
             },
